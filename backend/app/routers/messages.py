@@ -295,6 +295,15 @@ async def delete_message(
         )
     
     message.folder = "Deleted"
+    
+    # Also remove classification so it doesn't appear in original category
+    classification_result = await db.execute(
+        select(Classification).where(Classification.message_id == message_id)
+    )
+    classification = classification_result.scalar_one_or_none()
+    if classification:
+        await db.delete(classification)
+    
     await db.commit()
     
     return None

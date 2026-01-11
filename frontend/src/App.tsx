@@ -12,7 +12,7 @@ import SearchBar from './components/SearchBar'
 import Toast from './components/Toast'
 import { useToast } from './hooks/useToast'
 
-type CategoryFilter = 'all' | 'starred' | 'Interesantes' | 'SPAM' | 'EnCopia' | 'Servicios'
+type CategoryFilter = 'all' | 'starred' | 'Interesantes' | 'SPAM' | 'EnCopia' | 'Servicios' | 'deleted'
 
 function App() {
   const [selectedAccount, setSelectedAccount] = useState<number | null>(null)
@@ -35,8 +35,9 @@ function App() {
   const { data: messages, isLoading: messagesLoading, refetch: refetchMessages } = useMessages(
     selectedAccount ? {
       account_id: selectedAccount,
-      classification_label: (categoryFilter !== 'all' && categoryFilter !== 'starred') ? categoryFilter : undefined,
+      classification_label: (categoryFilter !== 'all' && categoryFilter !== 'starred' && categoryFilter !== 'deleted') ? categoryFilter : undefined,
       is_starred: categoryFilter === 'starred' ? true : undefined,
+      folder: categoryFilter === 'deleted' ? 'Deleted' : undefined,
       ...searchFilters
     } : undefined
   )
@@ -328,6 +329,15 @@ function App() {
             <span className="folder-count">
               {serviciosCounts.unread > 0 && <span className="unread-badge">{serviciosCounts.unread}</span>}
               <span className="total-count">{serviciosCounts.total}</span>
+            </span>
+          </div>
+          <div
+            className={`folder-item ${categoryFilter === 'deleted' ? 'active' : ''}`}
+            onClick={() => handleCategoryClick('deleted')}
+          >
+            🗑️ Mensajes eliminados
+            <span className="folder-count">
+              <span className="total-count">{allMessages?.filter(m => m.folder === 'Deleted').length || 0}</span>
             </span>
           </div>
         </div>
