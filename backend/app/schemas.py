@@ -132,3 +132,35 @@ class SendEmailResponse(BaseModel):
     """Schema for send email response."""
     status: str
     message: str
+
+
+# Category schemas
+class CategoryCreate(BaseModel):
+    """Schema for creating a category."""
+    key: str
+    name: str
+    description: Optional[str] = None
+    ai_instruction: str
+    icon: Optional[str] = None
+
+
+class CategoryUpdate(BaseModel):
+    """Schema for updating a category."""
+    name: Optional[str] = None
+    description: Optional[str] = None
+    ai_instruction: Optional[str] = None
+    icon: Optional[str] = None
+
+
+class CategoryResponse(BaseModel):
+    """Schema for category response."""
+    id: int
+    key: str
+    name: str
+    description: Optional[str] = None
+    ai_instruction: str
+    icon: Optional[str] = None
+    is_system: bool
+    
+    class Config:
+        from_attributes = True

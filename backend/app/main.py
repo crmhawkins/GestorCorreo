@@ -38,7 +38,7 @@ app = FastAPI(
 # CORS for local development
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "tauri://localhost"],
+    allow_origins=["http://localhost:5173", "http://localhost:5174", "tauri://localhost"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -66,7 +66,7 @@ async def health():
 
 
 # Import routers
-from app.routers import accounts, messages, sync, attachments, classify, whitelist, send, ai
+from app.routers import accounts, messages, sync, attachments, classify, whitelist, send, ai, categories
 
 app.include_router(accounts.router, prefix="/api/accounts", tags=["accounts"])
 app.include_router(messages.router, prefix="/api/messages", tags=["messages"])
@@ -76,6 +76,7 @@ app.include_router(classify.router, prefix="/api/classify", tags=["classify"])
 app.include_router(whitelist.router, prefix="/api/whitelist", tags=["whitelist"])
 app.include_router(send.router, prefix="/api/send", tags=["send"])
 app.include_router(ai.router, prefix="/api/ai", tags=["ai"])
+app.include_router(categories.router, prefix="/api/categories", tags=["categories"])
 
 if __name__ == "__main__":
     import uvicorn

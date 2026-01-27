@@ -6,6 +6,8 @@ import * as api from '../services/api';
 import axios from 'axios';
 import { getCategories, createCategory, updateCategory, deleteCategory } from '../services/api';
 
+export const streamSync = api.streamSync;
+
 // Accounts hooks
 export const useAccounts = () => {
     return useQuery({

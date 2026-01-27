@@ -7,7 +7,7 @@ from app.database import get_db
 from app.models import Category
 from app.schemas import CategoryCreate, CategoryUpdate, CategoryResponse
 
-router = APIRouter(prefix="/api/categories", tags=["categories"])
+router = APIRouter(tags=["categories"])
 
 @router.get("/", response_model=List[CategoryResponse])
 async def list_categories(db: AsyncSession = Depends(get_db)):

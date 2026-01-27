@@ -162,11 +162,11 @@ Eres un asistente de clasificación de correos electrónicos para la empresa Haw
 - Responde SOLO con JSON válido, sin texto adicional.
 
 **Formato de respuesta (JSON estricto):**
-{{
+{{{{
   "label": "{labels_joined}",
   "confidence": 0.85,
   "rationale": "Máximo 2 frases explicando la decisión"
-}}
+}}}}
 """
     return context_part + categories_text + instructions_part
 
