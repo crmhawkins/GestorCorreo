@@ -1,7 +1,7 @@
 /**
  * Settings component - manage accounts and test connections
  */
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAccounts, useCategories, useCreateCategory, useUpdateCategory, useDeleteCategory, useUpdateAccount } from '../hooks/useApi'
 import { useToast } from '../hooks/useToast'
 import axios from 'axios'
@@ -47,6 +47,115 @@ function ProfileEditor({ account, onSave }: { account: any, onSave: () => void }
             >
                 {saving ? '💾 Saving...' : '💾 Save Profile'}
             </button>
+        </div>
+    )
+
+}
+
+function PromptEditor({ account, onSave }: { account: any, onSave: () => void }) {
+    const [classificationPrompt, setClassificationPrompt] = useState(account.custom_classification_prompt || '')
+    const [reviewPrompt, setReviewPrompt] = useState(account.custom_review_prompt || '')
+    const [syncInterval, setSyncInterval] = useState(account.auto_sync_interval || 0)
+    const [defaults, setDefaults] = useState<{ classification_prompt: string, review_prompt: string } | null>(null)
+    const [saving, setSaving] = useState(false)
+    const { showSuccess, showError } = useToast()
+
+
+    useEffect(() => {
+        axios.get('http://localhost:8000/api/system/prompts')
+            .then(res => {
+                setDefaults(res.data)
+                // If custom prompts are empty, pre-fill with defaults
+                if (!account.custom_classification_prompt) setClassificationPrompt(res.data.classification_prompt)
+                if (!account.custom_review_prompt) setReviewPrompt(res.data.review_prompt)
+            })
+            .catch(err => console.error('Failed to load default prompts', err))
+    }, [account])
+
+
+    const handleSave = async () => {
+        setSaving(true)
+        try {
+            await axios.put(`http://localhost:8000/api/accounts/${account.id}`, {
+                custom_classification_prompt: classificationPrompt || null,
+                custom_review_prompt: reviewPrompt || null,
+                auto_sync_interval: syncInterval
+            })
+            showSuccess('Settings updated')
+            onSave()
+        } catch (err) {
+            showError('Failed to update settings')
+        } finally {
+            setSaving(false)
+        }
+    }
+
+    const handleReset = () => {
+        if (!confirm('Reset prompts to default?')) return;
+        if (defaults) {
+            setClassificationPrompt(defaults.classification_prompt);
+            setReviewPrompt(defaults.review_prompt);
+        } else {
+            // Fallback if defaults haven't loaded yet
+            setClassificationPrompt('');
+            setReviewPrompt('');
+        }
+    }
+
+    return (
+        <div className="prompt-editor" style={{ marginTop: '10px', width: '100%', borderTop: '1px solid #333', paddingTop: '10px' }}>
+            <div style={{ marginBottom: '15px' }}>
+                <label className="config-label">Auto-Sync Interval</label>
+                <select
+                    value={syncInterval}
+                    onChange={(e) => setSyncInterval(Number(e.target.value))}
+                    style={{ background: '#333', color: '#fff', border: '1px solid #555', padding: '5px', borderRadius: '4px', marginLeft: '10px' }}
+                >
+                    <option value={0}>Manual (Descativado)</option>
+                    <option value={2}>Every 2 minutes</option>
+                    <option value={5}>Every 5 minutes</option>
+                    <option value={10}>Every 10 minutes</option>
+                    <option value={30}>Every 30 minutes</option>
+                </select>
+            </div>
+
+            <label className="config-label">Custom Classification Prompt</label>
+            <textarea
+                cols={40}
+                rows={5}
+                value={classificationPrompt}
+                onChange={(e) => setClassificationPrompt(e.target.value)}
+                placeholder="Default AI Prompt used if empty..."
+                style={{ width: '100%', padding: '5px', borderRadius: '4px', border: '1px solid #ccc', fontFamily: 'monospace', fontSize: '0.9em', marginBottom: '10px' }}
+            />
+
+            <label className="config-label">Custom Review Prompt (Conflict Resolution)</label>
+            <textarea
+                cols={40}
+                rows={3}
+                value={reviewPrompt}
+                onChange={(e) => setReviewPrompt(e.target.value)}
+                placeholder="Default AI Review Prompt used if empty..."
+                style={{ width: '100%', padding: '5px', borderRadius: '4px', border: '1px solid #ccc', fontFamily: 'monospace', fontSize: '0.9em' }}
+            />
+
+            <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
+                <button
+                    className="btn-primary"
+                    style={{ padding: '4px 8px', cursor: 'pointer' }}
+                    onClick={handleSave}
+                    disabled={saving}
+                >
+                    {saving ? '💾 Saving...' : '💾 Save Settings'}
+                </button>
+                <button
+                    className="btn-secondary"
+                    style={{ padding: '4px 8px', cursor: 'pointer' }}
+                    onClick={handleReset}
+                >
+                    Default Prompts
+                </button>
+            </div>
         </div>
     )
 }
@@ -124,6 +233,7 @@ export default function Settings({ onClose }: SettingsProps) {
                                                     <span>{account.imap_host}:{account.imap_port}</span>
                                                 </div>
                                                 <div className="detail-row">
+                                                    <span className="label">Owner Profile (AI Persona):</span>
                                                     <ProfileEditor account={account} onSave={refetch} />
                                                 </div>
                                                 <div className="detail-row">
@@ -136,9 +246,15 @@ export default function Settings({ onClose }: SettingsProps) {
                                                             disabled={updateAccount.isPending}
                                                         />
                                                         <span style={{ fontSize: '0.9em', color: account.auto_classify ? '#4ade80' : 'rgba(255,255,255,0.5)' }}>
-                                                            {account.auto_classify ? 'Active (Classifies new emails)' : 'Disabled'}
+                                                            {account.auto_classify ? 'Active' : 'Disabled'}
                                                         </span>
                                                     </label>
+                                                </div>
+
+                                                {/* Advanced Settings */}
+                                                <div className="detail-row" style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
+                                                    <span className="label" style={{ marginBottom: '5px', color: '#a5b4fc' }}>Advanced Config (Sync & AI Prompts):</span>
+                                                    <PromptEditor account={account} onSave={refetch} />
                                                 </div>
                                             </div>
                                         </div>

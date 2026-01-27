@@ -226,7 +226,7 @@ export default function Composer({ onClose, mode = 'new', originalMessage }: Com
                         />
                     </div>
 
-                    <div className="form-group">
+                    <div className="form-group message-container">
                         <label>Message</label>
                         <textarea
                             value={body}

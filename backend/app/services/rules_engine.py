@@ -122,7 +122,8 @@ def apply_priority_rules(
 async def classify_with_rules_and_ai(
     message_data: Dict,
     whitelist_domains: List[str],
-    categories: List[Dict] = []
+    categories: List[Dict] = [],
+    custom_classification_prompt: Optional[str] = None
 ) -> Dict:
     """
     Complete classification with rules + AI.
@@ -131,6 +132,7 @@ async def classify_with_rules_and_ai(
         message_data: Message data
         whitelist_domains: Whitelist domains
         categories: List of available categories
+        custom_classification_prompt: Optional custom prompt
     
     Returns:
         Classification result
@@ -144,4 +146,4 @@ async def classify_with_rules_and_ai(
         return rule_result
     
     # No rule matched, use AI
-    return await classify_message(message_data, categories)
+    return await classify_message(message_data, categories, custom_prompt=custom_classification_prompt)

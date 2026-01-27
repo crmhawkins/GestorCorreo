@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import './App.css'
-import { useAccounts, useMessages, useStartSync, useBulkMarkAsRead, useCategories, streamSync } from './hooks/useApi'
+import { useAccounts, useMessages, useBulkMarkAsRead, useCategories, streamSync } from './hooks/useApi'
+import { useQueryClient } from '@tanstack/react-query'
 import type { Message } from './services/api'
 import axios from 'axios'
 import AccountManager from './components/AccountManager'
@@ -18,6 +19,7 @@ type CategoryFilter = 'all' | 'starred' | 'deleted' | string
 
 function App() {
   console.log('App component rendering...');
+  const queryClient = useQueryClient()
   const [selectedAccount, setSelectedAccount] = useState<number | null>(null)
   const [showAccountManager, setShowAccountManager] = useState(false)
   const [selectedMessage, setSelectedMessage] = useState<Message | null>(null)
@@ -48,6 +50,23 @@ function App() {
       setSelectedAccount(accounts[0].id)
     }
   }, [accounts, selectedAccount])
+
+  // Auto-sync logic
+  useEffect(() => {
+    const currentAccount = accounts?.find(a => a.id === selectedAccount)
+    if (!currentAccount || !currentAccount.auto_sync_interval || currentAccount.auto_sync_interval <= 0) return
+
+    console.log(`Setting up auto-sync every ${currentAccount.auto_sync_interval} minutes`)
+
+    const intervalId = setInterval(() => {
+      if (syncState === null) { // Only sync if not already syncing
+        console.log('Triggering auto-sync...')
+        handleSync()
+      }
+    }, currentAccount.auto_sync_interval * 60 * 1000)
+
+    return () => clearInterval(intervalId)
+  }, [selectedAccount, accounts, syncState]) // Re-run if account updates or sync state changes
 
   // Query para mensajes filtrados (lo que se muestra en pantalla)
   const { data: messages, isLoading: messagesLoading, refetch: refetchMessages } = useMessages(
@@ -161,7 +180,8 @@ function App() {
             showSuccess(`Synced ${newCount} new messages`)
           }
 
-          refetchMessages()
+          // Refresh ALL messages data (counts and list)
+          queryClient.invalidateQueries({ queryKey: ['messages'] })
 
           // Auto close after 3 seconds
           setTimeout(() => setSyncState(null), 5000)

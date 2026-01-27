@@ -77,6 +77,8 @@ app.include_router(whitelist.router, prefix="/api/whitelist", tags=["whitelist"]
 app.include_router(send.router, prefix="/api/send", tags=["send"])
 app.include_router(ai.router, prefix="/api/ai", tags=["ai"])
 app.include_router(categories.router, prefix="/api/categories", tags=["categories"])
+from app.routers import system
+app.include_router(system.router, prefix="/api/system", tags=["system"])
 
 if __name__ == "__main__":
     import uvicorn

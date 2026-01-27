@@ -181,7 +181,12 @@ async def stream_sync(
                                 "body_text": message.body_text,
                                 "snippet": message.snippet
                             }
-                            classification_result = await classify_with_rules_and_ai(message_data, whitelist_domains, categories)
+                            classification_result = await classify_with_rules_and_ai(
+                                message_data, 
+                                whitelist_domains, 
+                                categories,
+                                custom_classification_prompt=account.custom_classification_prompt
+                            )
                             
                             if classification_result.get("status") != "error":
                                 classification = Classification(

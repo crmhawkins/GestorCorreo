@@ -22,6 +22,9 @@ class Account(Base):
     ssl_verify = Column(Boolean, default=True)  # Verify SSL certificates
     connection_timeout = Column(Integer, default=30)  # Connection timeout in seconds
     auto_classify = Column(Boolean, default=False)  # Automatically classify incoming emails
+    auto_sync_interval = Column(Integer, default=0)  # Auto-sync interval in minutes (0 = disabled)
+    custom_classification_prompt = Column(Text, nullable=True)  # Custom prompt for classification
+    custom_review_prompt = Column(Text, nullable=True)  # Custom prompt for conflict resolution
     owner_profile = Column(Text, nullable=True)  # AI Persona/Profile for this account
     last_sync_error = Column(Text, nullable=True)  # Last sync error message
     created_at = Column(DateTime, server_default=func.now())

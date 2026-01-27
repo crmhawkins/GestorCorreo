@@ -131,11 +131,16 @@ class OllamaClient:
 
 
 # Helper to build prompt
-def build_classification_prompt(categories: List[Dict]) -> str:
+def build_classification_prompt(categories: List[Dict], custom_prompt: Optional[str] = None) -> str:
     """
     Build the classification prompt dynamically based on available categories.
     """
-    context_part = """
+    if custom_prompt:
+        # If custom prompt is provided, use it as the base
+        base_prompt = custom_prompt
+    else:
+        # Default prompt structure
+        base_prompt = """
 Eres un asistente de clasificación de correos electrónicos para la empresa Hawkins (@hawkins.es).
 
 **Contexto del correo:**
@@ -156,6 +161,31 @@ Eres un asistente de clasificación de correos electrónicos para la empresa Haw
 
     labels_joined = "|".join(labels_list)
     
+    if custom_prompt:
+         # For custom prompt, we just append the categories and JSON instructions if not present?
+         # Or we assume the user wrote a full prompt?
+         # Best approach: Replace variables in custom prompt if they exist, or append categories.
+         # For simplicity: We will expect the user to write {from_name} etc if they want dynamic values.
+         # And we will ALWAYS append the JSON instructions at the end to ensure JSON format.
+         pass
+    else:
+        pass # Handle default logic below
+
+    # If using default, build it up
+    if not custom_prompt:
+        # ... logic as before ...
+        pass
+    
+    # Actually, simplifying:
+    # If custom prompt, we just return it formatted with message details + categories + json instructions?
+    # No, user prompt should replace the "Contexto" part mainly.
+    
+    # Revised strategy:
+    # If custom_prompt is None, use default.
+    # If provided, use it but append categories and JSON constraints to ensure it works.
+    
+    prompt_text = base_prompt if custom_prompt else base_prompt + categories_text
+
     instructions_part = f"""
 **IMPORTANTE:**
 - Clasifica el correo en ÚNICAMENTE una de las categorías anteriores.
@@ -168,14 +198,15 @@ Eres un asistente de clasificación de correos electrónicos para la empresa Haw
   "rationale": "Máximo 2 frases explicando la decisión"
 }}}}
 """
-    return context_part + categories_text + instructions_part
+    return prompt_text + instructions_part
 
 
 async def classify_with_model(
     message_data: Dict,
     model: str,
     categories: List[Dict],
-    ollama_client: Optional[OllamaClient] = None
+    ollama_client: Optional[OllamaClient] = None,
+    custom_prompt: Optional[str] = None
 ) -> Dict:
     """
     Classify message with a specific model.
@@ -186,7 +217,11 @@ async def classify_with_model(
     # Prepare prompt
     body_preview = (message_data.get("body_text") or message_data.get("snippet") or "")[:500]
     
-    dynamic_prompt_template = build_classification_prompt(categories)
+    if custom_prompt:
+         # Use custom prompt template
+         dynamic_prompt_template = build_classification_prompt(categories, custom_prompt)
+    else:
+         dynamic_prompt_template = build_classification_prompt(categories)
     
     prompt = dynamic_prompt_template.format(
         from_name=message_data.get("from_name", ""),
@@ -280,13 +315,14 @@ async def review_with_gpt(
         }
 
 
-async def classify_message(message_data: Dict, categories: List[Dict]) -> Dict:
+async def classify_message(message_data: Dict, categories: List[Dict], custom_prompt: Optional[str] = None) -> Dict:
     """
     Full classification pipeline with consensus/tiebreaker.
     
     Args:
         message_data: Dict with message fields
         categories: List of category dicts (key, ai_instruction)
+        custom_prompt: Optional custom classification prompt
     
     Returns:
         Dict with complete classification result
@@ -301,8 +337,8 @@ async def classify_message(message_data: Dict, categories: List[Dict]) -> Dict:
         }
     
     # Step 1: Classify with both models
-    gpt_result = await classify_with_model(message_data, GPT_MODEL, categories, ollama_client)
-    qwen_result = await classify_with_model(message_data, QWEN_MODEL, categories, ollama_client)
+    gpt_result = await classify_with_model(message_data, GPT_MODEL, categories, ollama_client, custom_prompt)
+    qwen_result = await classify_with_model(message_data, QWEN_MODEL, categories, ollama_client, custom_prompt)
     
     # Step 2: Check for consensus
     if gpt_result["label"] == qwen_result["label"]:

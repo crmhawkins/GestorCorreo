@@ -31,6 +31,9 @@ export interface Account {
   created_at: string;
   updated_at: string;
   auto_classify?: boolean;
+  auto_sync_interval?: number;
+  custom_classification_prompt?: string;
+  custom_review_prompt?: string;
   owner_profile?: string; // User persona
 }
 

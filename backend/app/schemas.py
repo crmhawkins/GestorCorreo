@@ -19,6 +19,9 @@ class AccountCreate(BaseModel):
     ssl_verify: bool = True  # Verify SSL certificates
     connection_timeout: int = 30  # Connection timeout in seconds
     auto_classify: bool = False
+    auto_sync_interval: int = 0
+    custom_classification_prompt: Optional[str] = None
+    custom_review_prompt: Optional[str] = None
     owner_profile: Optional[str] = None  # AI Persona/Profile
 
 
@@ -35,6 +38,9 @@ class AccountUpdate(BaseModel):
     ssl_verify: Optional[bool] = None
     connection_timeout: Optional[int] = None
     auto_classify: Optional[bool] = None
+    auto_sync_interval: Optional[int] = None
+    custom_classification_prompt: Optional[str] = None
+    custom_review_prompt: Optional[str] = None
     owner_profile: Optional[str] = None
 
 
@@ -51,6 +57,9 @@ class AccountResponse(BaseModel):
     ssl_verify: bool
     connection_timeout: int
     auto_classify: bool = False
+    auto_sync_interval: int = 0
+    custom_classification_prompt: Optional[str] = None
+    custom_review_prompt: Optional[str] = None
     owner_profile: Optional[str] = None
     last_sync_error: Optional[str] = None
     created_at: datetime
