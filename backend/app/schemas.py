@@ -24,8 +24,6 @@ class AccountCreate(BaseModel):
     custom_review_prompt: Optional[str] = None
     owner_profile: Optional[str] = None
     protocol: str = 'imap'
-    mailbox_storage_bytes: Optional[int] = None
-    mailbox_storage_limit: Optional[int] = None
 
 class AccountUpdate(BaseModel):
     """Schema for updating an account."""

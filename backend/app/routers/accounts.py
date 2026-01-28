@@ -5,6 +5,7 @@ from typing import Annotated, List
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+import logging
 
 from app.database import get_db
 from app.models import Account, User
@@ -14,6 +15,7 @@ from app.services.imap_service import IMAPService
 from app.dependencies import get_current_user
 
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
@@ -67,55 +69,69 @@ async def create_account(
     db: AsyncSession = Depends(get_db)
 ):
     """Create a new email account."""
-    # Check if account already exists for this user (including deleted ones? Maybe check active only?)
-    # If a deleted account exists with same email, maybe restore it? Or just allow duplicate?
-    # Better to allow only one active account per email.
-    
-    result = await db.execute(
-        select(Account).where(
-            Account.email_address == account_data.email_address,
-            Account.user_id == current_user.id,
-            Account.is_deleted == False
+    try:
+        logger.info(f"Creating account for user {current_user.username}: {account_data.email_address}")
+        
+        # Check if account already exists for this user (including deleted ones? Maybe check active only?)
+        # If a deleted account exists with same email, maybe restore it? Or just allow duplicate?
+        # Better to allow only one active account per email.
+        
+        result = await db.execute(
+            select(Account).where(
+                Account.email_address == account_data.email_address,
+                Account.user_id == current_user.id,
+                Account.is_deleted == False
+            )
         )
-    )
-    existing = result.scalar_one_or_none()
-    
-    if existing:
+        existing = result.scalar_one_or_none()
+        
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Account with this email already exists"
+            )
+        
+        # Encrypt password
+        encrypted_password = encrypt_password(account_data.password)
+        
+        # Create account
+        account = Account(
+            user_id=current_user.id,
+            email_address=account_data.email_address,
+            imap_host=account_data.imap_host,
+            imap_port=account_data.imap_port,
+            smtp_host=account_data.smtp_host,
+            smtp_port=account_data.smtp_port,
+            username=account_data.username,
+            encrypted_password=encrypted_password,
+            is_active=True,
+            ssl_verify=account_data.ssl_verify,
+            connection_timeout=account_data.connection_timeout,
+            auto_classify=account_data.auto_classify,
+            auto_sync_interval=account_data.auto_sync_interval,
+            custom_classification_prompt=account_data.custom_classification_prompt,
+            custom_review_prompt=account_data.custom_review_prompt,
+            owner_profile=account_data.owner_profile,
+            protocol=account_data.protocol,
+            is_deleted=False
+        )
+        
+        db.add(account)
+        await db.commit()
+        await db.refresh(account)
+        
+        logger.info(f"Account created successfully: {account.id}")
+        return account
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error creating account: {type(e).__name__}: {str(e)}", exc_info=True)
+        await db.rollback()
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Account with this email already exists"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create account: {str(e)}"
         )
-    
-    # Encrypt password
-    encrypted_password = encrypt_password(account_data.password)
-    
-    # Create account
-    account = Account(
-        user_id=current_user.id,
-        email_address=account_data.email_address,
-        imap_host=account_data.imap_host,
-        imap_port=account_data.imap_port,
-        smtp_host=account_data.smtp_host,
-        smtp_port=account_data.smtp_port,
-        username=account_data.username,
-        encrypted_password=encrypted_password,
-        is_active=True,
-        ssl_verify=account_data.ssl_verify,
-        connection_timeout=account_data.connection_timeout,
-        auto_classify=account_data.auto_classify,
-        auto_sync_interval=account_data.auto_sync_interval,
-        custom_classification_prompt=account_data.custom_classification_prompt,
-        custom_review_prompt=account_data.custom_review_prompt,
-        owner_profile=account_data.owner_profile,
-        protocol=account_data.protocol,
-        is_deleted=False
-    )
-    
-    db.add(account)
-    await db.commit()
-    await db.refresh(account)
-    
-    return account
 
 
 @router.put("/{account_id}", response_model=AccountResponse)

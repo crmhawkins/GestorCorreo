@@ -158,3 +158,15 @@ class Category(Base):
     icon = Column(String)  # Emoji
     is_system = Column(Boolean, default=False)  # If true, cannot be deleted
     created_at = Column(DateTime, server_default=func.now())
+
+
+class AIConfig(Base):
+    """AI Classification API configuration."""
+    __tablename__ = "ai_config"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    api_url = Column(String, nullable=False)
+    api_key = Column(String, nullable=False)
+    primary_model = Column(String, nullable=False)
+    secondary_model = Column(String, nullable=False)
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())

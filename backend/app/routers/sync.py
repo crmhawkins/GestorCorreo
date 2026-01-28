@@ -6,12 +6,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from app.database import get_db
-from app.models import Account, AuditLog
+from app.models import Account, AuditLog, User
 from app.schemas import SyncRequest, SyncResponse
 from app.utils.security import decrypt_password
 from app.services.imap_service import sync_account_messages
+from app.dependencies import get_current_active_user
 import json
+import logging
 from datetime import datetime
+
+logger = logging.getLogger(__name__)
 
 
 router = APIRouter()
@@ -23,7 +27,8 @@ import asyncio
 @router.post("/start", response_model=SyncResponse)
 async def start_sync(
     sync_request: SyncRequest,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
 ):
     """
     Start synchronization for an account (Legacy non-streaming).
@@ -34,7 +39,7 @@ async def start_sync(
     # ... (same setup code as before)
     # Get account
     result = await db.execute(
-        select(Account).where(Account.id == sync_request.account_id)
+        select(Account).where(Account.id == sync_request.account_id, Account.user_id == current_user.id)
     )
     account = result.scalar_one_or_none()
     
@@ -109,14 +114,15 @@ async def start_sync(
 @router.post("/stream")
 async def stream_sync(
     sync_request: SyncRequest,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
 ):
     """
     Stream synchronization progress for an account using SSE.
     """
     # Get account
     result = await db.execute(
-        select(Account).where(Account.id == sync_request.account_id)
+        select(Account).where(Account.id == sync_request.account_id, Account.user_id == current_user.id)
     )
     account = result.scalar_one_or_none()
     
@@ -129,122 +135,135 @@ async def stream_sync(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to decrypt password")
 
     async def event_generator():
-        classified_count = 0
-        sync_final_result = None
-        
-        # 1. Sync Phase
-        async for progress in sync_account_messages(account, password, db, sync_request.folder):
-            yield f"data: {json.dumps(progress)}\n\n"
-            if progress.get('status') in ['success', 'error']:
-                sync_final_result = progress
-
-        # 2. Auto-Classify Phase
-        should_classify = account.auto_classify or sync_request.auto_classify
-        if should_classify and sync_final_result and sync_final_result.get("status") == "success" and sync_final_result.get("new_messages", 0) > 0:
-            yield f"data: {json.dumps({'status': 'classifying', 'message': 'Auto-classifying new messages...'})}\n\n"
-            
+        # Create a new database session for the generator
+        from app.database import AsyncSessionLocal
+        async with AsyncSessionLocal() as db:
             try:
-                from app.models import Message, Classification, ServiceWhitelist, Category
-                from app.services.rules_engine import classify_with_rules_and_ai
-                
-                # Fetch messages
-                # Only fetch the messages that were just downloaded
-                new_msg_ids = sync_final_result.get("new_message_ids", [])
-                
-                if not new_msg_ids:
-                    # Should not match normally if new_messages > 0 but safety check
-                    new_messages = []
-                else:
-                    result = await db.execute(
-                        select(Message)
-                        .outerjoin(Classification, Message.id == Classification.message_id)
-                        .where(Message.id.in_(new_msg_ids))
-                        .where(Classification.id == None)
-                    )
-                    new_messages = result.scalars().all()
-                
-                # If for some reason list is empty (e.g. race condition or already classified?)
-                # Fallback to logic only if strictly needed, but better to trust IDs.
+                classified_count = 0
+                sync_final_result = None
+            
+                # 1. Sync Phase
+                async for progress in sync_account_messages(account, password, db, sync_request.folder):
+                    yield f"data: {json.dumps(progress)}\n\n"
+                    if progress.get('status') in ['success', 'error']:
+                        sync_final_result = progress
 
-                total_to_classify = len(new_messages)
-                
-                if total_to_classify > 0:
-                    # Get resources
-                    result = await db.execute(select(ServiceWhitelist).where(ServiceWhitelist.is_active == True))
-                    whitelist_domains = [e.domain_pattern for e in result.scalars().all()]
+                # 2. Auto-Classify Phase
+                should_classify = account.auto_classify or sync_request.auto_classify
+                if should_classify and sync_final_result and sync_final_result.get("status") == "success" and sync_final_result.get("new_messages", 0) > 0:
+                    yield f"data: {json.dumps({'status': 'classifying', 'message': 'Auto-classifying new messages...'})}\n\n"
                     
-                    result = await db.execute(select(Category))
-                    categories = [{"key": c.key, "ai_instruction": c.ai_instruction} for c in result.scalars().all()]
-                    
-                    for i, message in enumerate(new_messages):
-                        yield f"data: {json.dumps({'status': 'classifying_progress', 'current': i+1, 'total': total_to_classify, 'message': f'Classifying {i+1}/{total_to_classify}'})}\n\n"
-                        try:
-                            # Classify logic (copied from original)
-                            message_data = {
-                                "from_name": message.from_name,
-                                "from_email": message.from_email,
-                                "to_addresses": message.to_addresses,
-                                "cc_addresses": message.cc_addresses,
-                                "subject": message.subject,
-                                "date": str(message.date),
-                                "body_text": message.body_text,
-                                "snippet": message.snippet
-                            }
-                            classification_result = await classify_with_rules_and_ai(
-                                message_data, 
-                                whitelist_domains, 
-                                categories,
-                                custom_classification_prompt=account.custom_classification_prompt
+                    try:
+                        from app.models import Message, Classification, ServiceWhitelist, Category
+                        from app.services.rules_engine import classify_with_rules_and_ai
+                        
+                        # Fetch messages
+                        # Only fetch the messages that were just downloaded
+                        new_msg_ids = sync_final_result.get("new_message_ids", [])
+                        
+                        if not new_msg_ids:
+                            # Should not match normally if new_messages > 0 but safety check
+                            new_messages = []
+                        else:
+                            result = await db.execute(
+                                select(Message)
+                                .outerjoin(Classification, Message.id == Classification.message_id)
+                                .where(Message.id.in_(new_msg_ids))
+                                .where(Classification.id == None)
                             )
-                            
-                            if classification_result.get("status") != "error":
-                                classification = Classification(
-                                    message_id=message.id,
-                                    gpt_label=classification_result.get("gpt_label"),
-                                    gpt_confidence=classification_result.get("gpt_confidence"),
-                                    gpt_rationale=classification_result.get("gpt_rationale"),
-                                    qwen_label=classification_result.get("qwen_label"),
-                                    qwen_confidence=classification_result.get("qwen_confidence"),
-                                    qwen_rationale=classification_result.get("qwen_rationale"),
-                                    final_label=classification_result["final_label"],
-                                    final_reason=classification_result.get("final_reason"),
-                                    decided_by=classification_result["decided_by"]
-                                )
-                                db.add(classification)
-                                classified_count += 1
-                        except Exception as e:
-                            logger.error(f"Error classifying message {message.id}: {e}")
-                    
-                    await db.commit()
-            except Exception as e:
-                logger.error(f"Auto-classify error: {e}")
-                yield f"data: {json.dumps({'status': 'warning', 'message': 'Auto-classification failed'})}\n\n"
+                            new_messages = result.scalars().all()
+                        
+                        # If for some reason list is empty (e.g. race condition or already classified?)
+                        # Fallback to logic only if strictly needed, but better to trust IDs.
 
-        # 3. Log and Finish
-        if sync_final_result:
-             audit_log = AuditLog(
-                action="sync",
-                payload=json.dumps({
-                    "account_id": account.id,
-                    "folder": sync_request.folder,
-                    "auto_classify": sync_request.auto_classify,
-                    "result": sync_final_result,
-                    "classified_count": classified_count
-                }),
-                status="success" if sync_final_result["status"] == "success" else "error",
-                error_message=sync_final_result.get("error")
-            )
-             db.add(audit_log)
-             await db.commit()
-        
-        # Final event with full stats
-        final_payload = {
-            'status': 'complete',
-            'sync_result': sync_final_result,
-            'classified_count': classified_count,
-            'message': 'Sync completed'
-        }
-        yield f"data: {json.dumps(final_payload)}\n\n"
+                        total_to_classify = len(new_messages)
+                        
+                        if total_to_classify > 0:
+                            # Get resources
+                            result = await db.execute(select(ServiceWhitelist).where(ServiceWhitelist.is_active == True))
+                            whitelist_domains = [e.domain_pattern for e in result.scalars().all()]
+                            
+                            result = await db.execute(select(Category))
+                            categories = [{"key": c.key, "ai_instruction": c.ai_instruction} for c in result.scalars().all()]
+                            
+                            for i, message in enumerate(new_messages):
+                                yield f"data: {json.dumps({'status': 'classifying_progress', 'current': i+1, 'total': total_to_classify, 'message': f'Classifying {i+1}/{total_to_classify}'})}\n\n"
+                                try:
+                                    # Classify logic (copied from original)
+                                    message_data = {
+                                        "from_name": message.from_name,
+                                        "from_email": message.from_email,
+                                        "to_addresses": message.to_addresses,
+                                        "cc_addresses": message.cc_addresses,
+                                        "subject": message.subject,
+                                        "date": str(message.date),
+                                        "body_text": message.body_text,
+                                        "snippet": message.snippet
+                                    }
+                                    classification_result = await classify_with_rules_and_ai(
+                                        message_data, 
+                                        whitelist_domains, 
+                                        categories,
+                                        custom_classification_prompt=account.custom_classification_prompt
+                                    )
+                                    
+                                    if classification_result.get("status") != "error":
+                                        classification = Classification(
+                                            message_id=message.id,
+                                            gpt_label=classification_result.get("gpt_label"),
+                                            gpt_confidence=classification_result.get("gpt_confidence"),
+                                            gpt_rationale=classification_result.get("gpt_rationale"),
+                                            qwen_label=classification_result.get("qwen_label"),
+                                            qwen_confidence=classification_result.get("qwen_confidence"),
+                                            qwen_rationale=classification_result.get("qwen_rationale"),
+                                            final_label=classification_result["final_label"],
+                                            final_reason=classification_result.get("final_reason"),
+                                            decided_by=classification_result["decided_by"]
+                                        )
+                                        db.add(classification)
+                                        classified_count += 1
+                                except Exception as e:
+                                    logger.error(f"Error classifying message {message.id}: {e}")
+                            
+                            await db.commit()
+                    except Exception as e:
+                        logger.error(f"Auto-classify error: {e}")
+                        yield f"data: {json.dumps({'status': 'warning', 'message': 'Auto-classification failed'})}\n\n"
+
+                # 3. Log and Finish
+                if sync_final_result:
+                     audit_log = AuditLog(
+                        action="sync",
+                        payload=json.dumps({
+                            "account_id": account.id,
+                            "folder": sync_request.folder,
+                            "auto_classify": sync_request.auto_classify,
+                            "result": sync_final_result,
+                            "classified_count": classified_count
+                        }),
+                        status="success" if sync_final_result["status"] == "success" else "error",
+                        error_message=sync_final_result.get("error")
+                    )
+                     db.add(audit_log)
+                     await db.commit()
+                
+                # Final event with full stats
+                final_payload = {
+                    'status': 'complete',
+                    'sync_result': sync_final_result,
+                    'classified_count': classified_count,
+                    'message': 'Sync completed'
+                }
+                yield f"data: {json.dumps(final_payload)}\n\n"
+            except Exception as e:
+                # Catch any unhandled exception and send error to client
+                logger.exception(f"Unexpected error in sync stream: {e}")
+                error_payload = {
+                    'status': 'error',
+                    'error': str(e),
+                    'message': 'Sync failed due to unexpected error'
+                }
+                yield f"data: {json.dumps(error_payload)}\n\n"
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 

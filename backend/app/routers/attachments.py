@@ -31,11 +31,17 @@ async def download_attachment(
             detail="Attachment not found"
         )
     
+    if not attachment.local_path:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Attachment file path not registered"
+        )
+
     # Construct full path
     data_dir = Path(__file__).parent.parent.parent.parent / "data"
     file_path = data_dir / attachment.local_path
     
-    if not file_path.exists():
+    if not file_path.exists() or file_path.is_dir():
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Attachment file not found on disk"

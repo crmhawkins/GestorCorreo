@@ -468,12 +468,142 @@ async def sync_account_messages(
     """
     imap = IMAPService(account, password)
     
+    
     try:
+        # Handle POP3 protocol
         if account.protocol == 'pop3':
-            yield {'status': 'error', 'error': 'POP3 synchronization is not yet implemented.'}
+            logger.info(f"Using POP3 protocol for {account.email_address}")
+            from app.services.pop3_service import POP3Service
+            
+            pop3 = POP3Service(account, password)
+            
+            yield {'status': 'connecting', 'message': f'Connecting to POP3 server {account.imap_host}...'}
+            
+            if not await pop3.connect():
+                yield {'status': 'error', 'error': 'Failed to connect to POP3 server'}
+                return
+            
+            yield {'status': 'connected', 'message': 'Connected to POP3 server'}
+            
+            # Get message count
+            message_count = await pop3.get_message_count()
+            logger.info(f"Found {message_count} messages in POP3 mailbox")
+            
+            yield {
+                'status': 'fetching',
+                'message': f'Found {message_count} messages in mailbox'
+            }
+            
+            # Fetch existing message IDs from database to avoid duplicates
+            existing_result = await db.execute(
+                select(Message.message_id).where(Message.account_id == account.id)
+            )
+            existing_ids = {row[0] for row in existing_result.all()}
+            
+            saved_count = 0
+            new_message_ids = []
+            
+            # Fetch messages
+            for msg_num in range(1, message_count + 1):
+                yield {
+                    'status': 'downloading',
+                    'message': f'Downloading message {msg_num} of {message_count}...'
+                }
+                
+                msg = await pop3.fetch_message(msg_num)
+                if not msg:
+                    continue
+                
+                headers = await pop3.get_message_headers(msg)
+                
+                # Skip if already exists
+                if headers['message_id'] in existing_ids:
+                    continue
+                
+                body_data = await pop3.get_message_body(msg)
+                
+                # Create message record
+                # Parse from address  
+                from_name, from_email = '', headers['from']
+                if '<' in headers['from'] and '>' in headers['from']:
+                    from_name = headers['from'].split('<')[0].strip().strip('"')
+                    from_email = headers['from'].split('<')[1].split('>')[0].strip()
+                
+                message = Message(
+                    id=str(uuid.uuid4()),
+                    account_id=account.id,
+                    imap_uid=msg_num,  # Using message number as UID
+                    message_id=headers['message_id'],
+                    subject=headers['subject'],
+                    from_name=from_name,
+                    from_email=from_email,
+                    to_addresses=json.dumps([headers['to']]) if headers['to'] else json.dumps([]),
+                    cc_addresses=json.dumps([headers['cc']]) if headers.get('cc') else json.dumps([]),
+                    bcc_addresses=None,
+                    date=headers['date'],
+                    body_text=body_data.get('body_text'),
+                    body_html=body_data.get('body_html'),
+                    is_read=False,
+                    is_starred=False,
+                    has_attachments=len(body_data.get('attachments', [])) > 0
+                )
+                
+                db.add(message)
+                saved_count += 1
+                new_message_ids.append(message.id)
+                
+                # Save attachments
+                if body_data.get('attachments'):
+                    from app.models import Attachment
+                    from pathlib import Path
+                    
+                    # Ensure attachments directory exists
+                    attachments_dir = Path(__file__).parent.parent.parent.parent / "data" / "attachments"
+                    attachments_dir.mkdir(parents=True, exist_ok=True)
+                    
+                    for att_data in body_data['attachments']:
+                        local_path = ''
+                        # Save content to disk if available
+                        if att_data.get('content'):
+                            try:
+                                safe_filename = att_data.get('filename', 'unknown').replace('/', '_').replace('\\', '_')
+                                unique_filename = f"{uuid.uuid4().hex}_{safe_filename}"
+                                file_path = attachments_dir / unique_filename
+                                
+                                with open(file_path, 'wb') as f:
+                                    f.write(att_data['content'])
+                                
+                                # Store relative path to data/
+                                local_path = str(file_path.relative_to(attachments_dir.parent))
+                            except Exception as e:
+                                logger.error(f"Failed to save attachment {att_data.get('filename')}: {e}")
+
+                        attachment = Attachment(
+                            message_id=message.id,
+                            filename=att_data.get('filename', 'unknown'),
+                            mime_type=att_data.get('mime_type'),
+                            size_bytes=att_data.get('size_bytes', 0),
+                            local_path=local_path
+                        )
+                        db.add(attachment)
+                
+                # Commit periodically
+                if saved_count % 10 == 0:
+                    await db.commit()
+            
+            await db.commit()
+            await pop3.disconnect()
+            
+            logger.info(f"POP3 sync completed for {account.email_address}: {saved_count} messages saved")
+            
+            yield {
+                'status': 'success',
+                'new_messages': saved_count,
+                'new_message_ids': new_message_ids
+            }
             return
 
-        # Connect to IMAP
+        # Continue with IMAP for imap protocol
         logger.info(f"Starting sync for account {account.email_address}")
         yield {'status': 'connecting', 'message': f'Connecting to {account.imap_host}...'}
         
@@ -604,10 +734,23 @@ async def sync_account_messages(
             db.add(message)
             saved_count += 1
             new_message_ids.append(message.id)
+            
+            # Save attachments to database if any
+            if body_data and body_data.get('attachments'):
+                from app.models import Attachment
+                for att_data in body_data['attachments']:
+                    attachment = Attachment(
+                        message_id=message.id,
+                        filename=att_data.get('filename', 'unknown'),
+                        mime_type=att_data.get('mime_type'),
+                        size_bytes=att_data.get('size_bytes', 0),
+                        local_path=att_data.get('local_path', '')
+                    )
+                    db.add(attachment)
 
             # Update mailbox storage usage
             msg_size = (len(body_text) if body_text else 0) + (len(body_html) if body_html else 0)
-            # Add attachment sizes if any (Not explicitly fetched here as size_bytes, assuming handled if attachments were processed fully)
+            # Add attachment sizes if any
             # Basic text/html size update for now
             if account.mailbox_storage_bytes is None:
                 account.mailbox_storage_bytes = 0

@@ -16,13 +16,14 @@ export default function AccountManager({ onClose }: AccountManagerProps) {
     const { showSuccess, showError } = useToast()
 
     const [formData, setFormData] = useState<AccountCreate>({
-        email_address: 'ivan@hawkins.es',
-        imap_host: 'imap.hawkins.es',
-        imap_port: 993,
-        smtp_host: 'smtp.hawkins.es',
+        email_address: '',
+        imap_host: 'pop.ionos.es',
+        imap_port: 995,
+        smtp_host: 'smtp.ionos.es',
         smtp_port: 587,
-        username: 'ivan@hawkins.es',
+        username: '',
         password: '',
+        protocol: 'pop3',
     })
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -72,12 +73,12 @@ export default function AccountManager({ onClose }: AccountManagerProps) {
                         <label>Protocol</label>
                         <select
                             name="protocol"
-                            value={formData.protocol || 'imap'}
+                            value={formData.protocol || 'pop3'}
                             onChange={e => setFormData(prev => ({ ...prev, protocol: e.target.value as 'imap' | 'pop3' }))}
                             style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd' }}
                         >
+                            <option value="pop3">POP3</option>
                             <option value="imap">IMAP</option>
-                            <option value="pop3">POP3 (Experimental)</option>
                         </select>
                     </div>
 
@@ -106,24 +107,25 @@ export default function AccountManager({ onClose }: AccountManagerProps) {
 
                     <div className="form-row">
                         <div className="form-group">
-                            <label>IMAP Host</label>
+                            <label>POP/IMAP Host</label>
                             <input
                                 type="text"
                                 name="imap_host"
                                 value={formData.imap_host}
                                 onChange={handleChange}
                                 required
-                                placeholder="imap.gmail.com"
+                                placeholder="pop.ionos.es or imap.ionos.es"
                             />
                         </div>
                         <div className="form-group">
-                            <label>IMAP Port</label>
+                            <label>POP/IMAP Port</label>
                             <input
                                 type="number"
                                 name="imap_port"
                                 value={formData.imap_port}
                                 onChange={handleChange}
                                 required
+                                placeholder="995 (POP) or 993 (IMAP)"
                             />
                         </div>
                     </div>

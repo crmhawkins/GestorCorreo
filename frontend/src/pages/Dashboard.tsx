@@ -292,8 +292,8 @@ const Dashboard: React.FC = () => {
         showInfo('Starting bulk classification...')
 
         try {
-            // Get all unclassified messages
-            const unclassifiedMessages = messages?.filter(m => !m.classification_label) || []
+            // Get all unclassified messages (from entire account, not just current view)
+            const unclassifiedMessages = allMessages?.filter(m => !m.classification_label) || []
 
             if (unclassifiedMessages.length === 0) {
                 showInfo('No unclassified messages found')
@@ -324,7 +324,9 @@ const Dashboard: React.FC = () => {
                 showInfo(`Classifying... ${progress}/${unclassifiedMessages.length}`)
             }
 
-            refetchMessages()
+            // Reload messages to show updated classifications
+            await refetchMessages()
+
             showSuccess(`Bulk classification complete! Classified: ${classified}, Failed: ${failed}`)
         } catch (error: any) {
             showError('Bulk classification failed')

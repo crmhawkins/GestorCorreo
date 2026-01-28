@@ -217,11 +217,18 @@ export const streamSync = async (
   onError: (error: any) => void
 ) => {
   try {
+    const token = getToken();
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json',
+    };
+
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
     const response = await fetch(`${API_BASE_URL}/api/sync/stream`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers,
       body: JSON.stringify(data),
     });
 
@@ -422,4 +429,33 @@ export const deleteUser = async (id: number, permanent: boolean = false) => {
 export const restoreUser = async (id: number) => {
   const response = await apiClient.post(`/api/users/${id}/restore`);
   return response.data;
+};
+
+// ============================================
+// AI CONFIGURATION  
+// ============================================
+
+export interface AIConfig {
+  api_url: string;
+  primary_model: string;
+  secondary_model: string;
+}
+
+export interface AIConfigUpdate extends AIConfig {
+  api_key: string;
+}
+
+export const getAIConfig = async (): Promise<AIConfig> => {
+  const response = await apiClient.get('/api/ai-config');
+  return response.data;
+};
+
+export const updateAIConfig = async (config: AIConfigUpdate) => {
+  const response = await apiClient.put('/api/ai-config', config);
+  return response.data;
+};
+
+export const getAvailableModels = async (): Promise<string[]> => {
+  const response = await apiClient.get('/api/ai-config/models');
+  return response.data.models;
 };

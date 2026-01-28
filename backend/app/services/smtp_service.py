@@ -8,6 +8,9 @@ from email.mime.base import MIMEBase
 from email import encoders
 import os
 from typing import List, Optional
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class SMTPService:
@@ -45,6 +48,8 @@ class SMTPService:
             dict with status and message
         """
         try:
+            logger.info(f"Attempting to send email to {to_addresses} via {self.host}:{self.port}")
+            
             # Create message
             msg = MIMEMultipart('alternative')
             msg['From'] = self.username
@@ -80,18 +85,37 @@ class SMTPService:
                 all_recipients.extend(bcc_addresses)
             
             # Send email
-            async with aiosmtplib.SMTP(hostname=self.host, port=self.port) as smtp:
-                await smtp.starttls()
+            logger.info(f"Connecting to SMTP server {self.host}:{self.port}")
+            
+            # Determine connection method based on port
+            use_tls = (self.port == 465)  # Port 465 uses implicit SSL/TLS
+            
+            async with aiosmtplib.SMTP(
+                hostname=self.host, 
+                port=self.port,
+                use_tls=use_tls
+            ) as smtp:
+                # Only use STARTTLS if not already using TLS
+                if not use_tls:
+                    logger.info("Starting STARTTLS...")
+                    await smtp.starttls()
+                else:
+                    logger.info("Using SSL/TLS connection")
+                    
+                logger.info(f"Logging in as {self.username}...")
                 await smtp.login(self.username, self.password)
+                logger.info("Sending message...")
                 await smtp.send_message(msg, recipients=all_recipients)
             
+            logger.info(f"Email sent successfully to {len(all_recipients)} recipients")
             return {
                 "status": "success",
                 "message": f"Email sent to {len(all_recipients)} recipients"
             }
             
         except Exception as e:
+            logger.error(f"Failed to send email: {type(e).__name__}: {str(e)}", exc_info=True)
             return {
                 "status": "error",
-                "message": str(e)
+                "message": f"{type(e).__name__}: {str(e)}"
             }

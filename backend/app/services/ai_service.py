@@ -1,14 +1,12 @@
 """
-AI classification service using Ollama.
+AI classification service using Remote AI API.
 """
 import httpx
 import json
 from typing import Dict, Optional, Literal, List
 from datetime import datetime
 
-OLLAMA_BASE_URL = "http://localhost:11434"
-GPT_MODEL = "gpt-oss:120b-cloud"
-QWEN_MODEL = "qwen3-coder:480b-cloud"
+# Constants removed - now loaded from database
 
 # Classification labels
 ClassificationLabel = Literal["Interesantes", "SPAM", "EnCopia", "Servicios"]
@@ -78,11 +76,12 @@ Analiza ambas clasificaciones y el correo original. Emite una decisión final ú
 """
 
 
-class OllamaClient:
-    """Client for Ollama API."""
+class RemoteAIClient:
+    """Client for Remote AI API."""
     
-    def __init__(self, base_url: str = OLLAMA_BASE_URL):
-        self.base_url = base_url
+    def __init__(self, api_url: str, api_key: str):
+        self.api_url = api_url
+        self.api_key = api_key
     
     async def generate(
         self,
@@ -92,42 +91,73 @@ class OllamaClient:
         timeout: float = 120.0
     ) -> Dict:
         """
-        Generate completion from Ollama.
+        Generate completion from Remote AI API.
         
         Args:
             model: Model name
             prompt: Prompt text
-            format: Output format (json or text)
+            format: Output format (json or text) - kept for compatibility
             timeout: Request timeout in seconds
         
         Returns:
-            Dict with response
+            Dict with response in Ollama-compatible format
         """
-        async with httpx.AsyncClient(timeout=timeout) as client:
+        async with httpx.AsyncClient(timeout=timeout, verify=False) as client:
             try:
                 response = await client.post(
-                    f"{self.base_url}/api/generate",
+                    self.api_url,
+                    headers={"x-api-key": self.api_key},
                     json={
                         "model": model,
-                        "prompt": prompt,
-                        "format": format,
-                        "stream": False
+                        "prompt": prompt
                     }
                 )
                 response.raise_for_status()
-                return response.json()
+                data = response.json()
+                
+                # Adapt response to Ollama format
+                return {
+                    "response": data.get("respuesta", ""),
+                    "success": data.get("success", True)
+                }
             except httpx.HTTPError as e:
-                print(f"Ollama API error: {e}")
+                print(f"Remote AI API error: {e}")
                 raise
     
     async def check_health(self) -> bool:
-        """Check if Ollama is running."""
+        """Check if Remote AI API is accessible."""
         try:
-            async with httpx.AsyncClient(timeout=5.0) as client:
-                response = await client.get(f"{self.base_url}/api/tags")
+            async with httpx.AsyncClient(timeout=5.0, verify=False) as client:
+                response = await client.get(
+                    self.api_url,
+                    headers={"x-api-key": self.api_key}
+                )
                 return response.status_code == 200
         except:
             return False
+    
+    async def list_models(self) -> List[str]:
+        """
+        Get available models from API.
+        Since the API doesn't have a dedicated list endpoint,
+        we return common Ollama models.
+        """
+        # Common Ollama models - user can type custom names too
+        common_models = [
+            "gpt-oss:120b-cloud",
+            "qwen3-coder:480b-cloud",
+            "qwen3:latest",
+            "llama3:latest",
+            "mistral:latest",
+            "codellama:latest",
+            "gemma:latest",
+            "phi3:latest"
+        ]
+        return common_models
+
+
+# Legacy alias for compatibility
+OllamaClient = RemoteAIClient
 
 
 # Helper to build prompt
@@ -205,14 +235,16 @@ async def classify_with_model(
     message_data: Dict,
     model: str,
     categories: List[Dict],
-    ollama_client: Optional[OllamaClient] = None,
+    ai_client: Optional[RemoteAIClient] = None,
     custom_prompt: Optional[str] = None
 ) -> Dict:
     """
     Classify message with a specific model.
     """
-    if ollama_client is None:
-        ollama_client = OllamaClient()
+    if ai_client is None:
+        # Load config from DB
+        config = await _get_ai_config()
+        ai_client = RemoteAIClient(config["api_url"], config["api_key"])
     
     # Prepare prompt
     body_preview = (message_data.get("body_text") or message_data.get("snippet") or "")[:500]
@@ -233,9 +265,9 @@ async def classify_with_model(
         body_preview=body_preview
     )
     
-    # Call Ollama
+    # Call Remote AI
     try:
-        response = await ollama_client.generate(model, prompt, format="json")
+        response = await ai_client.generate(model, prompt, format="json")
         
         # Parse JSON response
         result_text = response.get("response", "{}")
@@ -261,7 +293,8 @@ async def review_with_gpt(
     message_data: Dict,
     gpt_result: Dict,
     qwen_result: Dict,
-    ollama_client: Optional[OllamaClient] = None
+    ai_client: Optional[RemoteAIClient] = None,
+    gpt_model: str = None
 ) -> Dict:
     """
     GPT reviews both classifications and makes final decision.
@@ -270,13 +303,16 @@ async def review_with_gpt(
         message_data: Original message data
         gpt_result: GPT's initial classification
         qwen_result: Qwen's classification
-        ollama_client: Optional OllamaClient instance
+        ai_client: Optional RemoteAIClient instance
+        gpt_model: Primary model name
     
     Returns:
         Dict with final_label, final_reason, why_not_other
     """
-    if ollama_client is None:
-        ollama_client = OllamaClient()
+    if ai_client is None:
+        config = await _get_ai_config()
+        ai_client = RemoteAIClient(config["api_url"], config["api_key"])
+        gpt_model = config["primary_model"]
     
     body_preview = (message_data.get("body_text") or message_data.get("snippet") or "")[:500]
     
@@ -295,7 +331,7 @@ async def review_with_gpt(
     )
     
     try:
-        response = await ollama_client.generate(GPT_MODEL, prompt, format="json")
+        response = await ai_client.generate(gpt_model, prompt, format="json")
         result_text = response.get("response", "{}")
         review = json.loads(result_text)
         
@@ -315,6 +351,43 @@ async def review_with_gpt(
         }
 
 
+async def _get_ai_config() -> Dict:
+    """Load AI configuration from database."""
+    try:
+        from app.database import AsyncSessionLocal
+        from app.models import AIConfig
+        from sqlalchemy import select
+        
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(select(AIConfig).limit(1))
+            config = result.scalar_one_or_none()
+            
+            if not config:
+                # Return defaults if not found
+                print("⚠️ Warning: No AI config found in database, using defaults")
+                return {
+                    "api_url": "https://192.168.1.45/chat/models",
+                    "api_key": "OllamaAPI_2024_K8mN9pQ2rS5tU7vW3xY6zA1bC4eF8hJ0lM",
+                    "primary_model": "gpt-oss:120b-cloud",
+                    "secondary_model": "qwen3-coder:480b-cloud"
+                }
+            
+            return {
+                "api_url": config.api_url,
+                "api_key": config.api_key,
+                "primary_model": config.primary_model,
+                "secondary_model": config.secondary_model
+            }
+    except Exception as e:
+        print(f"❌ Error loading AI config: {e}, using defaults")
+        return {
+            "api_url": "https://192.168.1.45/chat/models",
+            "api_key": "OllamaAPI_2024_K8mN9pQ2rS5tU7vW3xY6zA1bC4eF8hJ0lM",
+            "primary_model": "gpt-oss:120b-cloud",
+            "secondary_model": "qwen3-coder:480b-cloud"
+        }
+
+
 async def classify_message(message_data: Dict, categories: List[Dict], custom_prompt: Optional[str] = None) -> Dict:
     """
     Full classification pipeline with consensus/tiebreaker.
@@ -327,18 +400,20 @@ async def classify_message(message_data: Dict, categories: List[Dict], custom_pr
     Returns:
         Dict with complete classification result
     """
-    ollama_client = OllamaClient()
+    # Load AI config
+    config = await _get_ai_config()
+    ai_client = RemoteAIClient(config["api_url"], config["api_key"])
     
-    # Check if Ollama is running
-    if not await ollama_client.check_health():
+    # Check if Remote AI is accessible
+    if not await ai_client.check_health():
         return {
             "status": "error",
-            "error": "Ollama is not running or not accessible"
+            "error": "Remote AI API is not running or not accessible"
         }
     
     # Step 1: Classify with both models
-    gpt_result = await classify_with_model(message_data, GPT_MODEL, categories, ollama_client, custom_prompt)
-    qwen_result = await classify_with_model(message_data, QWEN_MODEL, categories, ollama_client, custom_prompt)
+    gpt_result = await classify_with_model(message_data, config["primary_model"], categories, ai_client, custom_prompt)
+    qwen_result = await classify_with_model(message_data, config["secondary_model"], categories, ai_client, custom_prompt)
     
     # Step 2: Check for consensus
     if gpt_result["label"] == qwen_result["label"]:
@@ -358,7 +433,7 @@ async def classify_message(message_data: Dict, categories: List[Dict], custom_pr
     
     else:
         # Disagreement - GPT reviews
-        review_result = await review_with_gpt(message_data, gpt_result, qwen_result, ollama_client)
+        review_result = await review_with_gpt(message_data, gpt_result, qwen_result, ai_client, config["primary_model"])
         
         return {
             "status": "success",
@@ -397,13 +472,18 @@ async def generate_reply(
     message_data: Dict,
     user_instruction: str = "",
     owner_profile: str = "Eres profesional y eficiente.",
-    ollama_client: Optional[OllamaClient] = None
+    ai_client: Optional[RemoteAIClient] = None
 ) -> Dict:
     """
     Generate a reply for a message.
     """
-    if ollama_client is None:
-        ollama_client = OllamaClient()
+    if ai_client is None:
+        config = await _get_ai_config()
+        ai_client = RemoteAIClient(config["api_url"], config["api_key"])
+        gpt_model = config["primary_model"]
+    else:
+        config = await _get_ai_config()
+        gpt_model = config["primary_model"]
 
     prompt = REPLY_PROMPT.format(
         from_name=message_data.get("from_name", ""),
@@ -448,7 +528,7 @@ async def generate_reply(
     """
     
     try:
-        response = await ollama_client.generate(GPT_MODEL, json_prompt, format="json")
+        response = await ai_client.generate(gpt_model, json_prompt, format="json")
         result_text = response.get("response", "{}")
         result_json = json.loads(result_text)
         return {
