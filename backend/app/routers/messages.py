@@ -8,8 +8,9 @@ from sqlalchemy.orm import outerjoin
 from typing import List, Optional
 
 from app.database import get_db
-from app.models import Message, Classification
+from app.models import Message, Classification, Account, Attachment
 from app.schemas import MessageResponse, MessageDetailResponse, MessageUpdate
+from sqlalchemy import func
 
 
 router = APIRouter()
@@ -185,6 +186,54 @@ async def empty_folder(
         # Execute delete
         result = await db.execute(query)
         messages = result.scalars().all()
+        
+        for message in messages:
+            # Decrement storage
+            msg_size = (len(message.body_text) if message.body_text else 0) + (len(message.body_html) if message.body_html else 0)
+            # Add attachment sizes
+            # We need to fetch attachments or sum them up
+            # For simplicity in this valid "bulk" context, we might want to do a sum query first for performance
+            # But iterating is fine for reasonable numbers or we do a separate aggregate query
+            
+            # Simple approach for now per message (can be optimized later)
+            result_att = await db.execute(select(func.sum(Attachment.size_bytes)).where(Attachment.message_id == message.id))
+            att_size = result_att.scalar() or 0
+            
+            total_msg_size = msg_size + att_size
+            
+            # Get account to update
+            # Ideally we fetch account once but messages might belong to different accounts if not careful, 
+            # though the endpoint has account_id param.
+            # We can do a single update at the end if we trust they are all same account.
+            # endpoint has account_id, so we can aggregate.
+            pass
+
+        # Aggregate size cleanup
+        # sum text + html
+        q_size = select(
+            func.sum(func.length(Message.body_text)), 
+            func.sum(func.length(Message.body_html))
+        ).where(Message.id.in_([m.id for m in messages]))
+        
+        res_size = await db.execute(q_size)
+        sum_text, sum_html = res_size.one()
+        sum_text = sum_text or 0
+        sum_html = sum_html or 0
+        
+        # sum attachments
+        q_att_size = select(func.sum(Attachment.size_bytes)).join(Message).where(Message.id.in_([m.id for m in messages]))
+        res_att_size = await db.execute(q_att_size)
+        sum_att = res_att_size.scalar() or 0
+        
+        total_deleted_bytes = sum_text + sum_html + sum_att
+        
+        if total_deleted_bytes > 0:
+             # Update account
+             acc_result = await db.execute(select(Account).where(Account.id == account_id))
+             account = acc_result.scalar_one_or_none()
+             if account:
+                 if account.mailbox_storage_bytes:
+                     account.mailbox_storage_bytes = max(0, account.mailbox_storage_bytes - total_deleted_bytes)
         
         for message in messages:
             await db.delete(message)

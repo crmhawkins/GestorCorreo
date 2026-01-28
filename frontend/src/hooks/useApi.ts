@@ -9,10 +9,10 @@ import { getCategories, createCategory, updateCategory, deleteCategory } from '.
 export const streamSync = api.streamSync;
 
 // Accounts hooks
-export const useAccounts = () => {
+export const useAccounts = (deleted: boolean = false) => {
     return useQuery({
-        queryKey: ['accounts'],
-        queryFn: api.getAccounts,
+        queryKey: ['accounts', deleted],
+        queryFn: () => api.getAccounts(deleted),
     });
 };
 
@@ -23,7 +23,7 @@ export const useCreateAccount = () => {
         mutationFn: api.createAccount,
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['accounts'] });
-            queryClient.invalidateQueries({ queryKey: ['messages'] }); // Added invalidation for messages
+            queryClient.invalidateQueries({ queryKey: ['messages'] });
         },
     });
 };
@@ -33,6 +33,28 @@ export const useUpdateAccount = () => {
 
     return useMutation({
         mutationFn: ({ id, data }: { id: number; data: any }) => api.updateAccount(id, data),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['accounts'] });
+        },
+    });
+};
+
+export const useDeleteAccount = () => {
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: ({ id, permanent }: { id: number; permanent?: boolean }) => api.deleteAccount(id, permanent),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['accounts'] });
+        },
+    });
+};
+
+export const useRestoreAccount = () => {
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: (id: number) => api.restoreAccount(id),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['accounts'] });
         },

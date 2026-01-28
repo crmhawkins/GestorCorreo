@@ -425,6 +425,10 @@ async def sync_account_messages(
     imap = IMAPService(account, password)
     
     try:
+        if account.protocol == 'pop3':
+            yield {'status': 'error', 'error': 'POP3 synchronization is not yet implemented.'}
+            return
+
         # Connect to IMAP
         logger.info(f"Starting sync for account {account.email_address}")
         yield {'status': 'connecting', 'message': f'Connecting to {account.imap_host}...'}
@@ -554,7 +558,15 @@ async def sync_account_messages(
             
             db.add(message)
             saved_count += 1
-            
+
+            # Update mailbox storage usage
+            msg_size = (len(body_text) if body_text else 0) + (len(body_html) if body_html else 0)
+            # Add attachment sizes if any (Not explicitly fetched here as size_bytes, assuming handled if attachments were processed fully)
+            # Basic text/html size update for now
+            if account.mailbox_storage_bytes is None:
+                account.mailbox_storage_bytes = 0
+            account.mailbox_storage_bytes += msg_size
+                        
             # Commit periodically to avoid huge transactions
             if saved_count % 10 == 0:
                 await db.commit()

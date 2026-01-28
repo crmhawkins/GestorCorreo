@@ -229,8 +229,17 @@ export default function Settings({ onClose }: SettingsProps) {
                                             </div>
                                             <div className="account-details">
                                                 <div className="detail-row">
-                                                    <span className="label">IMAP:</span>
-                                                    <span>{account.imap_host}:{account.imap_port}</span>
+                                                    <span className="label">Protocol:</span>
+                                                    <span>{account.protocol?.toUpperCase() || 'IMAP'} ({account.imap_host}:{account.imap_port})</span>
+                                                </div>
+                                                <div className="detail-row">
+                                                    <span className="label">Storage:</span>
+                                                    <span>
+                                                        {(account.mailbox_storage_bytes !== undefined && account.mailbox_storage_bytes !== null)
+                                                            ? (account.mailbox_storage_bytes / (1024 * 1024)).toFixed(2) + ' MB'
+                                                            : 'Unknown'}
+                                                        {account.mailbox_storage_limit ? ` / ${(account.mailbox_storage_limit / (1024 * 1024)).toFixed(2)} MB` : ''}
+                                                    </span>
                                                 </div>
                                                 <div className="detail-row">
                                                     <span className="label">Owner Profile (AI Persona):</span>

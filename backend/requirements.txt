@@ -10,3 +10,5 @@ cryptography==42.0.0
 keyring==24.3.0
 aiosmtplib==3.0.1
 python-dotenv==1.0.0
+pyjwt==2.8.0
+passlib[bcrypt]==1.7.4

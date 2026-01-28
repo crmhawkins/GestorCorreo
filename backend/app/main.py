@@ -66,7 +66,7 @@ async def health():
 
 
 # Import routers
-from app.routers import accounts, messages, sync, attachments, classify, whitelist, send, ai, categories
+from app.routers import accounts, messages, sync, attachments, classify, whitelist, send, ai, categories, auth, users
 
 app.include_router(accounts.router, prefix="/api/accounts", tags=["accounts"])
 app.include_router(messages.router, prefix="/api/messages", tags=["messages"])
@@ -79,6 +79,8 @@ app.include_router(ai.router, prefix="/api/ai", tags=["ai"])
 app.include_router(categories.router, prefix="/api/categories", tags=["categories"])
 from app.routers import system
 app.include_router(system.router, prefix="/api/system", tags=["system"])
+app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
+app.include_router(users.router, prefix="/api/users", tags=["users"])
 
 if __name__ == "__main__":
     import uvicorn

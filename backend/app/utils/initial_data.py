@@ -5,7 +5,7 @@ import os
 import logging
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from app.models import Account
+from app.models import Account, User
 from app.utils.security import encrypt_password
 
 logger = logging.getLogger(__name__)
@@ -17,6 +17,14 @@ async def init_default_account(db: AsyncSession) -> None:
     email = os.getenv("DEFAULT_EMAIL_ADDRESS")
     if not email:
         logger.info("No DEFAULT_EMAIL_ADDRESS set, skipping default account creation.")
+        return
+
+    # Check for admin user
+    result_user = await db.execute(select(User).where(User.username == "admin"))
+    admin_user = result_user.scalar_one_or_none()
+    
+    if not admin_user:
+        logger.warning("Admin user not found. Run migration first. Skipping default account.")
         return
 
     # Check if account exists
@@ -34,6 +42,7 @@ async def init_default_account(db: AsyncSession) -> None:
         encrypted_password = encrypt_password(password)
 
         new_account = Account(
+            user_id=admin_user.id,
             email_address=email,
             username=os.getenv("DEFAULT_USERNAME", email),
             encrypted_password=encrypted_password,

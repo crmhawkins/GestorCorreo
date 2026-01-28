@@ -22,8 +22,10 @@ class AccountCreate(BaseModel):
     auto_sync_interval: int = 0
     custom_classification_prompt: Optional[str] = None
     custom_review_prompt: Optional[str] = None
-    owner_profile: Optional[str] = None  # AI Persona/Profile
-
+    owner_profile: Optional[str] = None
+    protocol: str = 'imap'
+    mailbox_storage_bytes: Optional[int] = None
+    mailbox_storage_limit: Optional[int] = None
 
 class AccountUpdate(BaseModel):
     """Schema for updating an account."""
@@ -42,7 +44,7 @@ class AccountUpdate(BaseModel):
     custom_classification_prompt: Optional[str] = None
     custom_review_prompt: Optional[str] = None
     owner_profile: Optional[str] = None
-
+    protocol: Optional[str] = None  # New
 
 class AccountResponse(BaseModel):
     """Schema for account response."""
@@ -62,6 +64,13 @@ class AccountResponse(BaseModel):
     custom_review_prompt: Optional[str] = None
     owner_profile: Optional[str] = None
     last_sync_error: Optional[str] = None
+    
+    # New fields
+    is_deleted: bool
+    protocol: str = 'imap'
+    mailbox_storage_bytes: Optional[int] = None
+    mailbox_storage_limit: Optional[int] = None
+    
     created_at: datetime
     updated_at: datetime
     
@@ -173,6 +182,27 @@ class CategoryResponse(BaseModel):
     ai_instruction: str
     icon: Optional[str] = None
     is_system: bool
+    
+    class Config:
+        from_attributes = True
+
+
+# User schemas
+class UserCreate(BaseModel):
+    """Schema for creating a user."""
+    username: str
+    password: str
+    is_admin: bool = False
+
+
+class UserResponse(BaseModel):
+    """Schema for user response."""
+    id: int
+    username: str
+    is_active: bool
+    is_admin: bool
+    created_at: datetime
+    mailbox_usage_bytes: Optional[int] = None
     
     class Config:
         from_attributes = True

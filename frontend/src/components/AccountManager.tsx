@@ -69,6 +69,19 @@ export default function AccountManager({ onClose }: AccountManagerProps) {
                     </div>
 
                     <div className="form-group">
+                        <label>Protocol</label>
+                        <select
+                            name="protocol"
+                            value={formData.protocol || 'imap'}
+                            onChange={e => setFormData(prev => ({ ...prev, protocol: e.target.value as 'imap' | 'pop3' }))}
+                            style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd' }}
+                        >
+                            <option value="imap">IMAP</option>
+                            <option value="pop3">POP3 (Experimental)</option>
+                        </select>
+                    </div>
+
+                    <div className="form-group">
                         <label>Username</label>
                         <input
                             type="text"

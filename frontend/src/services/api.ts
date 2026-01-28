@@ -10,6 +10,20 @@ export const apiClient = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  timeout: 10000,
+});
+
+const TOKEN_KEY = 'auth_token';
+export const setToken = (token: string) => localStorage.setItem(TOKEN_KEY, token);
+export const getToken = () => localStorage.getItem(TOKEN_KEY);
+export const removeToken = () => localStorage.removeItem(TOKEN_KEY);
+
+apiClient.interceptors.request.use((config) => {
+  const token = getToken();
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
 });
 
 // Health check
@@ -35,6 +49,10 @@ export interface Account {
   custom_classification_prompt?: string;
   custom_review_prompt?: string;
   owner_profile?: string; // User persona
+  is_deleted: boolean;
+  protocol: 'imap' | 'pop3';
+  mailbox_storage_bytes?: number;
+  mailbox_storage_limit?: number;
 }
 
 export interface AccountCreate {
@@ -45,11 +63,12 @@ export interface AccountCreate {
   smtp_port: number;
   username: string;
   password: string;
+  protocol?: 'imap' | 'pop3';
 }
 
-export const getAccounts = async (): Promise<Account[]> => {
+export const getAccounts = async (deleted: boolean = false): Promise<Account[]> => {
   try {
-    const response = await apiClient.get('/api/accounts/');
+    const response = await apiClient.get('/api/accounts/', { params: { deleted } });
     return response.data;
   } catch (error) {
     console.warn('Backend unavailable. Returning mock account.');
@@ -64,8 +83,19 @@ export const getAccounts = async (): Promise<Account[]> => {
       is_active: true,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
+      is_deleted: false,
+      protocol: 'imap'
     }];
   }
+};
+
+export const deleteAccount = async (id: number, permanent: boolean = false) => {
+  await apiClient.delete(`/api/accounts/${id}`, { params: { permanent } });
+};
+
+export const restoreAccount = async (id: number) => {
+  const response = await apiClient.post(`/api/accounts/${id}/restore`);
+  return response.data;
 };
 
 export interface Message {
@@ -347,4 +377,49 @@ export const deleteCategory = async (id: number) => {
     MOCK_CATEGORIES = MOCK_CATEGORIES.filter(c => c.id !== id);
     return { success: true };
   }
+};
+
+// Auth
+export interface User {
+  id: number;
+  username: string;
+  is_active: boolean;
+  is_admin: boolean;
+  mailbox_usage_bytes?: number;
+}
+
+
+export const login = async (username: string, password: string): Promise<{ access_token: string }> => {
+  const formData = new FormData();
+  formData.append('username', username);
+  formData.append('password', password);
+
+  const response = await apiClient.post('/api/auth/token', formData, {
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+  });
+  return response.data;
+};
+
+export const getCurrentUser = async (): Promise<User> => {
+  const response = await apiClient.get('/api/auth/users/me');
+  return response.data;
+};
+
+export const getUsers = async (deleted: boolean = false): Promise<User[]> => {
+  const response = await apiClient.get('/api/users/', { params: { deleted } });
+  return response.data;
+};
+
+export const createUser = async (data: any): Promise<User> => {
+  const response = await apiClient.post('/api/users/', data);
+  return response.data;
+};
+
+export const deleteUser = async (id: number, permanent: boolean = false) => {
+  await apiClient.delete(`/api/users/${id}`, { params: { permanent } });
+};
+
+export const restoreUser = async (id: number) => {
+  const response = await apiClient.post(`/api/users/${id}/restore`);
+  return response.data;
 };
