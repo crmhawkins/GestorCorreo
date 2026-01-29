@@ -123,7 +123,7 @@ const Dashboard: React.FC = () => {
     const { data: messages, isLoading: messagesLoading, refetch: refetchMessages } = useMessages(
         selectedAccount ? {
             account_id: selectedAccount,
-            classification_label: (categoryFilter === 'all') ? 'INBOX' : ((categoryFilter !== 'starred' && categoryFilter !== 'deleted') ? categoryFilter : undefined),
+            classification_label: (searchFilters.search_all) ? undefined : ((categoryFilter === 'all') ? 'INBOX' : ((categoryFilter !== 'starred' && categoryFilter !== 'deleted') ? categoryFilter : undefined)),
             is_starred: categoryFilter === 'starred' ? true : undefined,
             folder: categoryFilter === 'deleted' ? 'Deleted' : undefined,
             ...searchFilters

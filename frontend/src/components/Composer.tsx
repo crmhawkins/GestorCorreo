@@ -5,7 +5,7 @@ import { useState, useEffect, type ChangeEvent } from 'react'
 import { useAccounts } from '../hooks/useApi'
 import { useToast } from '../hooks/useToast'
 import type { Message } from '../services/api'
-import axios from 'axios'
+import { apiClient } from '../services/api'
 import './Composer.css'
 
 type ComposerMode = 'new' | 'reply' | 'reply_all' | 'forward'
@@ -135,13 +135,15 @@ export default function Composer({ onClose, mode = 'new', originalMessage }: Com
             const currentAccount = accounts?.find(a => a.id === accountId);
             const ownerProfile = currentAccount?.owner_profile || "Eres un asistente profesional y educado.";
 
-            const response = await axios.post('http://localhost:8000/api/ai/generate_reply', {
+            const response = await apiClient.post('/api/ai/generate_reply', {
                 original_from_name: originalMessage.from_name,
                 original_from_email: originalMessage.from_email,
                 original_subject: originalMessage.subject,
                 original_body: originalMessage.snippet || "No content",
                 user_instruction: aiIntent || "Genera una respuesta profesional.",
                 owner_profile: ownerProfile
+            }, {
+                timeout: 60000 // 60 seconds timeout for AI
             })
 
             if (response.data.reply_body) {
@@ -152,7 +154,7 @@ export default function Composer({ onClose, mode = 'new', originalMessage }: Com
             }
         } catch (error) {
             console.error(error)
-            showError('Failed to generate AI reply')
+            showError('La IA no está conectada. Avise al soporte técnico.')
         } finally {
             setGenerating(false)
         }
@@ -173,7 +175,7 @@ export default function Composer({ onClose, mode = 'new', originalMessage }: Com
             const ccList = cc ? cc.split(',').map(email => email.trim()).filter(Boolean) : undefined
             const bccList = bcc ? bcc.split(',').map(email => email.trim()).filter(Boolean) : undefined
 
-            await axios.post('http://localhost:8000/api/send', {
+            await apiClient.post('/api/send', {
                 account_id: accountId,
                 to: toList,
                 cc: ccList,
