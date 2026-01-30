@@ -123,9 +123,9 @@ const Dashboard: React.FC = () => {
     const { data: messages, isLoading: messagesLoading, refetch: refetchMessages } = useMessages(
         selectedAccount ? {
             account_id: selectedAccount,
-            classification_label: (searchFilters.search_all) ? undefined : ((categoryFilter === 'all') ? 'INBOX' : ((categoryFilter !== 'starred' && categoryFilter !== 'deleted') ? categoryFilter : undefined)),
+            classification_label: (searchFilters.search_all) ? undefined : ((categoryFilter === 'all') ? 'INBOX' : ((categoryFilter !== 'starred' && categoryFilter !== 'deleted' && categoryFilter !== 'enviados') ? categoryFilter : undefined)),
             is_starred: categoryFilter === 'starred' ? true : undefined,
-            folder: categoryFilter === 'deleted' ? 'Deleted' : undefined,
+            folder: categoryFilter === 'deleted' ? 'Deleted' : (categoryFilter === 'enviados' ? 'Enviados' : undefined),
             ...searchFilters
         } : undefined
     )
@@ -591,6 +591,16 @@ const Dashboard: React.FC = () => {
                             </div>
                         )
                     })}
+
+                    <div
+                        className={`folder-item ${categoryFilter === 'enviados' ? 'active' : ''}`}
+                        onClick={() => handleCategoryClick('enviados')}
+                    >
+                        📤 Enviados
+                        <span className="folder-count">
+                            <span className="total-count">{allMessages?.filter(m => m.folder === 'Enviados').length || 0}</span>
+                        </span>
+                    </div>
 
                     <div
                         className={`folder-item ${categoryFilter === 'deleted' ? 'active' : ''}`}

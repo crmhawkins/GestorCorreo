@@ -139,6 +139,15 @@ async def classify_with_rules_and_ai(
     """
     from app.services.ai_service import classify_message
     
+    # Skip classification for sent emails
+    if message_data.get("folder") == "Enviados":
+        return {
+            "status": "skipped",
+            "final_label": None,
+            "final_reason": "Sent email - no classification needed",
+            "decided_by": "rule_sent_folder"
+        }
+    
     # First, try priority rules
     rule_result = apply_priority_rules(message_data, whitelist_domains)
     

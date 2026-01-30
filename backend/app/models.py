@@ -131,6 +131,19 @@ class ServiceWhitelist(Base):
     created_at = Column(DateTime, server_default=func.now())
 
 
+class SenderRule(Base):
+    """Rule to automatically move emails from a sender to a folder."""
+    __tablename__ = "sender_rules"
+    __table_args__ = (UniqueConstraint('user_id', 'sender_email', name='uix_sender_rule_user_email'),)
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    sender_email = Column(String, nullable=False)
+    target_folder = Column(String, nullable=False)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, server_default=func.now())
+
+
 class AuditLog(Base):
     """Audit log for operations."""
     __tablename__ = "audit_logs"
