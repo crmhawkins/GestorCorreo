@@ -1,18 +1,10 @@
 /**
  * Extended API client with message body and attachments
+ * Uses the authenticated apiClient from api.ts (includes Bearer token interceptor)
  */
-import axios from 'axios';
+import { apiClient } from './api';
 
 const API_BASE_URL = 'http://localhost:8000';
-
-export const apiClient = axios.create({
-    baseURL: API_BASE_URL,
-    headers: {
-        'Content-Type': 'application/json',
-    },
-});
-
-// ... (previous code remains the same)
 
 // Message Body
 export interface MessageBody {
@@ -42,5 +34,5 @@ export const getAttachmentDownloadUrl = (attachmentId: number): string => {
     return `${API_BASE_URL}/api/attachments/${attachmentId}`;
 };
 
-// Export all previous interfaces and functions
+// Export all previous interfaces and functions (including getMessage, Message, MessageDetail, etc.)
 export * from './api';

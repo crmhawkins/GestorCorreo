@@ -3,8 +3,7 @@
  */
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import * as api from '../services/api';
-import axios from 'axios';
-import { getCategories, createCategory, updateCategory, deleteCategory } from '../services/api';
+import { apiClient, getCategories, createCategory, updateCategory, deleteCategory } from '../services/api';
 
 export const streamSync = api.streamSync;
 
@@ -131,7 +130,7 @@ export const useClassifyMessage = () => {
 
     return useMutation({
         mutationFn: async (messageId: string) => {
-            const response = await axios.post(`http://localhost:8000/api/classify/${messageId}`);
+            const response = await apiClient.post(`/api/classify/${messageId}`);
             return response.data;
         },
         onSuccess: () => {
@@ -146,8 +145,8 @@ export const useMarkAsRead = () => {
 
     return useMutation({
         mutationFn: async ({ messageId, isRead }: { messageId: string; isRead: boolean }) => {
-            const response = await axios.patch(
-                `http://localhost:8000/api/messages/${messageId}/read`,
+            const response = await apiClient.patch(
+                `/api/messages/${messageId}/read`,
                 null,
                 { params: { is_read: isRead } }
             );
@@ -165,7 +164,7 @@ export const useDeleteMessage = () => {
 
     return useMutation({
         mutationFn: async (messageId: string) => {
-            await axios.delete(`http://localhost:8000/api/messages/${messageId}`);
+            await apiClient.delete(`/api/messages/${messageId}`);
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['messages'] });
@@ -179,8 +178,8 @@ export const useBulkMarkAsRead = () => {
 
     return useMutation({
         mutationFn: async ({ accountId, classificationLabel }: { accountId: number; classificationLabel?: string }) => {
-            const response = await axios.patch(
-                `http://localhost:8000/api/messages/bulk/read`,
+            const response = await apiClient.patch(
+                `/api/messages/bulk/read`,
                 null,
                 {
                     params: {
@@ -204,8 +203,8 @@ export const useToggleStar = () => {
 
     return useMutation({
         mutationFn: async ({ messageId, isStarred }: { messageId: string; isStarred: boolean }) => {
-            const response = await axios.patch(
-                `http://localhost:8000/api/messages/${messageId}/star`,
+            const response = await apiClient.patch(
+                `/api/messages/${messageId}/star`,
                 null,
                 { params: { is_starred: isStarred } }
             );
@@ -223,12 +222,15 @@ export const useMoveToFolder = () => {
 
     return useMutation({
         mutationFn: async ({ messageId, folder }: { messageId: string; folder: string }) => {
-            const response = await axios.patch(
-                `http://localhost:8000/api/messages/${messageId}/folder`,
+            const response = await apiClient.patch(
+                `/api/messages/${messageId}/folder`,
                 null,
                 { params: { folder } }
             );
             return response.data;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['messages'] });
         },
     });
 };
@@ -279,7 +281,7 @@ export const useEmptyFolder = () => {
 
     return useMutation({
         mutationFn: async ({ accountId, folder, classificationLabel }: { accountId: number; folder?: string; classificationLabel?: string }) => {
-            await axios.delete(`http://localhost:8000/api/messages/bulk`, {
+            await apiClient.delete(`/api/messages/bulk`, {
                 params: {
                     account_id: accountId,
                     folder,

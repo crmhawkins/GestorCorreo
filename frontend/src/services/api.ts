@@ -427,6 +427,7 @@ export const deleteUser = async (id: number, permanent: boolean = false) => {
 };
 
 export const restoreUser = async (id: number) => {
+  const response = await apiClient.post(`/api/users/${id}/restore`);
   return response.data;
 };
 
