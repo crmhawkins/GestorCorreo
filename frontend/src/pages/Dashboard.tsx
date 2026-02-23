@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import '../App.css'
 import { useAccounts, useMessages, useBulkMarkAsRead, useCategories, streamSync, useEmptyFolder, useDeleteAccount, useRestoreAccount, useToggleStar, useUpdateClassification, useDeleteMessage } from '../hooks/useApi'
 import { useQueryClient } from '@tanstack/react-query'
-import { apiClient } from '../services/api'
+import { apiClient, resyncMessageBodies } from '../services/api'
 import type { Message, MessageDetail } from '../services/api'
 
 import AccountManager from '../components/AccountManager'
@@ -32,6 +32,7 @@ const Dashboard: React.FC = () => {
 
     const [showSettings, setShowSettings] = useState(false)
     const [bulkClassifying, setBulkClassifying] = useState(false)
+    const [isResyncingBodies, setIsResyncingBodies] = useState(false)
     const [composerMode, setComposerMode] = useState<'new' | 'reply' | 'reply_all' | 'forward'>('new')
     const [composerOriginalMessage, setComposerOriginalMessage] = useState<Message | MessageDetail | null>(null)
     const [searchFilters, setSearchFilters] = useState<any>({})
@@ -263,6 +264,28 @@ const Dashboard: React.FC = () => {
                 setSyncState(null)
             }
         )
+    }
+
+    const handleResyncBodies = async () => {
+        if (!selectedAccount) return
+        if (!confirm('Esto re-descargará el cuerpo de todos los correos sin contenido. ¿Continuar?')) return
+
+        setIsResyncingBodies(true)
+        showInfo('Recuperando contenido de correos...')
+
+        try {
+            const result = await resyncMessageBodies(selectedAccount)
+            if (result.updated > 0) {
+                showSuccess(`Contenido recuperado: ${result.updated} de ${result.total} correos actualizados`)
+                queryClient.invalidateQueries({ queryKey: ['messages'] })
+            } else {
+                showInfo('No se encontraron correos sin contenido, o no se pudo recuperar el contenido.')
+            }
+        } catch (error: any) {
+            showError('Error al recuperar el contenido de los correos')
+        } finally {
+            setIsResyncingBodies(false)
+        }
     }
 
     const handleMessageClick = (message: Message) => {
@@ -657,6 +680,14 @@ const Dashboard: React.FC = () => {
                             disabled={!selectedAccount || (syncState !== null)}
                         >
                             {syncState ? '🔄 Sincronizando...' : '🔄 Sincronizar'}
+                        </button>
+                        <button
+                            className="btn-toolbar"
+                            onClick={handleResyncBodies}
+                            disabled={!selectedAccount || isResyncingBodies}
+                            title="Recuperar el cuerpo de correos que aparecen sin contenido"
+                        >
+                            {isResyncingBodies ? '⏳ Recuperando...' : '♻️ Recuperar Contenido'}
                         </button>
                     </div>
                 </div>

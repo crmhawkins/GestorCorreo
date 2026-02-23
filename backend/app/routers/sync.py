@@ -290,3 +290,94 @@ async def get_sync_status(db: AsyncSession = Depends(get_db)):
             for log in logs
         ]
     }
+
+
+@router.post("/resync-bodies")
+async def resync_message_bodies(
+    account_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Re-download body content for existing messages that have no body stored.
+    Useful when messages were synced without body content.
+    """
+    from app.services.imap_service import IMAPService
+    from app.utils.security import decrypt_password
+
+    result = await db.execute(
+        select(Account).where(Account.id == account_id, Account.user_id == current_user.id)
+    )
+    account = result.scalar_one_or_none()
+
+    if not account:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Account not found")
+
+    try:
+        password = decrypt_password(account.encrypted_password)
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to decrypt password")
+
+    # Get messages without body
+    from app.models import Message
+    msg_result = await db.execute(
+        select(Message)
+        .where(Message.account_id == account_id)
+        .where(
+            (Message.body_text == None) & (Message.body_html == None)
+        )
+        .limit(200)  # Process max 200 at a time
+    )
+    messages = msg_result.scalars().all()
+
+    if not messages:
+        return {"updated": 0, "message": "No messages without body found"}
+
+    imap = IMAPService(account, password)
+    try:
+        connected = await imap.connect()
+        if not connected:
+            raise HTTPException(status_code=500, detail="Failed to connect to IMAP server")
+
+        await imap.select_folder("INBOX")
+
+        updated_count = 0
+        failed_count = 0
+
+        for message in messages:
+            try:
+                body_data = await imap.fetch_full_message_body(message.imap_uid)
+                if body_data:
+                    body_text = body_data.get('body_text') or ''
+                    body_html = body_data.get('body_html') or ''
+                    # Only update if we actually got content
+                    if body_text or body_html:
+                        message.body_text = body_text if body_text else None
+                        message.body_html = body_html if body_html else None
+                        message.has_attachments = len(body_data.get('attachments', [])) > 0
+                        # Also update snippet from body
+                        if body_text and not message.snippet:
+                            message.snippet = body_text[:200]
+                        updated_count += 1
+                else:
+                    failed_count += 1
+            except Exception as e:
+                logger.error(f"Error re-syncing body for message {message.id}: {e}")
+                failed_count += 1
+
+        await db.commit()
+        await imap.disconnect()
+
+        return {
+            "updated": updated_count,
+            "failed": failed_count,
+            "total": len(messages),
+            "message": f"Re-synced {updated_count} message bodies"
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in resync-bodies: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+

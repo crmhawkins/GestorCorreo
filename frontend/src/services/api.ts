@@ -464,3 +464,12 @@ export const getAvailableModels = async (): Promise<string[]> => {
   const response = await apiClient.get('/api/ai-config/models');
   return response.data.models;
 };
+
+// Resync message bodies (for messages synced without body content)
+export const resyncMessageBodies = async (accountId: number): Promise<{ updated: number; failed: number; total: number; message: string }> => {
+  const response = await apiClient.post('/api/sync/resync-bodies', null, {
+    params: { account_id: accountId }
+  });
+  return response.data;
+};
+

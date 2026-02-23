@@ -413,17 +413,12 @@ class IMAPService:
         
         # Simple split by comma (can be improved)
         return [addr.strip() for addr in addresses.split(',') if addr.strip()]
-    
-    def fetch_full_message_body(self, uid: int) -> Optional[Dict]:
-        """Fetch and parse complete message body with attachments."""
-        if not self.connection:
-            self.logger.error("Cannot fetch message body: not connected")
-            return None
-        
+
     async def fetch_full_message_body(self, uid: int) -> Optional[Dict]:
         """Async wrapper for fetch_full_message_body."""
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, partial(self._fetch_full_message_body_sync, uid))
+
 
     def _fetch_full_message_body_sync(self, uid: int) -> Optional[Dict]:
         """Fetch and parse complete message body with attachments (Blocking)."""
