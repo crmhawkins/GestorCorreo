@@ -20,7 +20,6 @@ import { useNavigate } from 'react-router-dom'
 type CategoryFilter = 'all' | 'starred' | 'deleted' | string
 
 const Dashboard: React.FC = () => {
-    console.log('Dashboard component rendering...');
     const { user, logout } = useAuth();
     const navigate = useNavigate();
     const queryClient = useQueryClient()

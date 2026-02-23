@@ -1,7 +1,8 @@
 /**
  * Whitelist management component
  */
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { apiClient } from '../services/api'
 import './WhitelistManager.css'
 
 interface WhitelistEntry {
@@ -19,9 +20,8 @@ export default function WhitelistManager() {
 
     const loadWhitelist = async () => {
         try {
-            const response = await fetch('http://localhost:8000/api/whitelist')
-            const data = await response.json()
-            setEntries(data)
+            const response = await apiClient.get('/api/whitelist')
+            setEntries(response.data)
         } catch (error) {
             console.error('Error loading whitelist:', error)
         }
@@ -32,13 +32,9 @@ export default function WhitelistManager() {
         setLoading(true)
 
         try {
-            await fetch('http://localhost:8000/api/whitelist', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    domain_pattern: newDomain,
-                    description: newDescription
-                })
+            await apiClient.post('/api/whitelist', {
+                domain_pattern: newDomain,
+                description: newDescription
             })
 
             setNewDomain('')
@@ -55,18 +51,16 @@ export default function WhitelistManager() {
         if (!confirm('¿Eliminar este dominio de la whitelist?')) return
 
         try {
-            await fetch(`http://localhost:8000/api/whitelist/${id}`, {
-                method: 'DELETE'
-            })
+            await apiClient.delete(`/api/whitelist/${id}`)
             loadWhitelist()
         } catch (error) {
             console.error('Error deleting entry:', error)
         }
     }
 
-    useState(() => {
+    useEffect(() => {
         loadWhitelist()
-    })
+    }, [])
 
     return (
         <div className="whitelist-manager">
