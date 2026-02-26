@@ -48,24 +48,30 @@ class MIMEParser:
                 if part.is_multipart():
                     continue
                 
-                # Check if it's an attachment
-                if "attachment" in content_disposition:
-                    attachment_info = self._process_attachment(part)
+                # Determine if this part is an attachment:
+                # 1. Explicit Content-Disposition: attachment
+                is_explicit_attachment = "attachment" in content_disposition
+                # 2. Inline with a filename (e.g. Content-Disposition: inline; filename="x.pdf")
+                is_inline_with_name = "inline" in content_disposition and part.get_filename()
+                # 3. Has filename in Content-Type but no Content-Disposition (some older mail clients)
+                has_filename_no_disposition = (
+                    not content_disposition and
+                    part.get_filename() and
+                    content_type not in ("text/plain", "text/html")
+                )
+                
+                if is_explicit_attachment or is_inline_with_name or has_filename_no_disposition:
+                    is_inline = not is_explicit_attachment
+                    attachment_info = self._process_attachment(part, is_inline=is_inline)
                     if attachment_info:
                         attachments.append(attachment_info)
                 
-                # Extract body parts
+                # Extract body parts (only when not an attachment)
                 elif content_type == "text/plain" and not body_text:
                     body_text = self._decode_payload(part)
                 
                 elif content_type == "text/html" and not body_html:
                     body_html = self._decode_payload(part)
-                
-                # Handle inline attachments (like images)
-                elif content_disposition and "inline" in content_disposition:
-                    attachment_info = self._process_attachment(part, is_inline=True)
-                    if attachment_info:
-                        attachments.append(attachment_info)
         
         else:
             # Single part message

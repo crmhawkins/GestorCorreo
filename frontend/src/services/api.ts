@@ -480,3 +480,12 @@ export const resyncMessageBodies = async (accountId: number): Promise<{ updated:
   return response.data;
 };
 
+// Resync message attachments (for messages with has_attachments=true but no attachment records)
+export const resyncMessageAttachments = async (accountId: number): Promise<{ updated: number; failed: number; total: number; message: string }> => {
+  const response = await apiClient.post('/api/sync/resync-attachments', null, {
+    params: { account_id: accountId }
+  });
+  return response.data;
+};
+
+

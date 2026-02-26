@@ -381,3 +381,97 @@ async def resync_message_bodies(
         logger.error(f"Error in resync-bodies: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@router.post("/resync-attachments")
+async def resync_message_attachments(
+    account_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Re-download and save attachments for messages that have has_attachments=True
+    but no entries in the attachments table.
+    """
+    from app.services.imap_service import IMAPService
+    from app.utils.security import decrypt_password
+    from app.models import Message, Attachment
+    import uuid
+    from pathlib import Path
+
+    result = await db.execute(
+        select(Account).where(Account.id == account_id, Account.user_id == current_user.id)
+    )
+    account = result.scalar_one_or_none()
+
+    if not account:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Account not found")
+
+    try:
+        password = decrypt_password(account.encrypted_password)
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to decrypt password")
+
+    # Get messages that claim to have attachments but have none in the DB
+    msg_result = await db.execute(
+        select(Message)
+        .outerjoin(Attachment, Message.id == Attachment.message_id)
+        .where(Message.account_id == account_id)
+        .where(Message.has_attachments == True)
+        .where(Attachment.id == None)
+        .limit(100)
+    )
+    messages = msg_result.scalars().all()
+
+    if not messages:
+        return {"updated": 0, "failed": 0, "total": 0, "message": "No messages missing attachments found"}
+
+    imap = IMAPService(account, password)
+    try:
+        connected = await imap.connect()
+        if not connected:
+            raise HTTPException(status_code=500, detail="Failed to connect to IMAP server")
+
+        await imap.select_folder("INBOX")
+
+        updated_count = 0
+        failed_count = 0
+
+        for message in messages:
+            try:
+                body_data = await imap.fetch_full_message_body(message.imap_uid)
+                if body_data and body_data.get('attachments'):
+                    for att_data in body_data['attachments']:
+                        attachment = Attachment(
+                            message_id=message.id,
+                            filename=att_data.get('filename', 'unknown'),
+                            mime_type=att_data.get('mime_type'),
+                            size_bytes=att_data.get('size_bytes', 0),
+                            local_path=att_data.get('local_path', '')
+                        )
+                        db.add(attachment)
+                    updated_count += 1
+                else:
+                    # No attachments found despite the flag — correct it
+                    message.has_attachments = False
+                    failed_count += 1
+            except Exception as e:
+                logger.error(f"Error re-syncing attachments for message {message.id}: {e}")
+                failed_count += 1
+
+        await db.commit()
+        await imap.disconnect()
+
+        return {
+            "updated": updated_count,
+            "failed": failed_count,
+            "total": len(messages),
+            "message": f"Re-synced attachments for {updated_count} messages"
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in resync-attachments: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+

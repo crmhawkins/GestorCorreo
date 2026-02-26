@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import '../App.css'
 import { useAccounts, useMessages, useBulkMarkAsRead, useCategories, streamSync, useEmptyFolder, useDeleteAccount, useRestoreAccount, useToggleStar, useUpdateClassification, useDeleteMessage } from '../hooks/useApi'
 import { useQueryClient } from '@tanstack/react-query'
-import { apiClient, resyncMessageBodies } from '../services/api'
+import { apiClient, resyncMessageBodies, resyncMessageAttachments } from '../services/api'
 import type { Message, MessageDetail } from '../services/api'
 
 import AccountManager from '../components/AccountManager'
@@ -32,6 +32,7 @@ const Dashboard: React.FC = () => {
     const [showSettings, setShowSettings] = useState(false)
     const [bulkClassifying, setBulkClassifying] = useState(false)
     const [isResyncingBodies, setIsResyncingBodies] = useState(false)
+    const [isResyncingAttachments, setIsResyncingAttachments] = useState(false)
     const [composerMode, setComposerMode] = useState<'new' | 'reply' | 'reply_all' | 'forward'>('new')
     const [composerOriginalMessage, setComposerOriginalMessage] = useState<Message | MessageDetail | null>(null)
     const [searchFilters, setSearchFilters] = useState<any>({})
@@ -263,6 +264,28 @@ const Dashboard: React.FC = () => {
                 setSyncState(null)
             }
         )
+    }
+
+    const handleResyncAttachments = async () => {
+        if (!selectedAccount) return
+        if (!confirm('Esto re-descargará los adjuntos de correos que los indican pero no los tienen guardados. ¿Continuar?')) return
+
+        setIsResyncingAttachments(true)
+        showInfo('Recuperando adjuntos...')
+
+        try {
+            const result = await resyncMessageAttachments(selectedAccount)
+            if (result.updated > 0) {
+                showSuccess(`Adjuntos recuperados: ${result.updated} de ${result.total} correos actualizados`)
+                queryClient.invalidateQueries({ queryKey: ['messages'] })
+            } else {
+                showInfo('No se encontraron correos con adjuntos pendientes, o no se pudo recuperarlos.')
+            }
+        } catch (error: any) {
+            showError('Error al recuperar los adjuntos')
+        } finally {
+            setIsResyncingAttachments(false)
+        }
     }
 
     const handleResyncBodies = async () => {
@@ -687,6 +710,14 @@ const Dashboard: React.FC = () => {
                             title="Recuperar el cuerpo de correos que aparecen sin contenido"
                         >
                             {isResyncingBodies ? '⏳ Recuperando...' : '♻️ Recuperar Contenido'}
+                        </button>
+                        <button
+                            className="btn-toolbar"
+                            onClick={handleResyncAttachments}
+                            disabled={!selectedAccount || isResyncingAttachments}
+                            title="Recuperar adjuntos de correos que los tienen pendientes"
+                        >
+                            {isResyncingAttachments ? '⏳ Recuperando...' : '📎 Recuperar Adjuntos'}
                         </button>
                     </div>
                 </div>
