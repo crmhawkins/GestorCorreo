@@ -1,6 +1,7 @@
 """
 FastAPI application entry point for Mail Manager.
 """
+import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
@@ -41,10 +42,20 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# CORS for local development
+# CORS — origins permitidos (prod + dev)
+_default_origins = [
+    "https://correos.hawkins.es",
+    "http://localhost:5173",
+    "http://localhost:5174",
+    "tauri://localhost",
+]
+# Permite añadir más orígenes desde env: ALLOWED_ORIGINS=https://x.com,https://y.com
+_extra = os.environ.get("ALLOWED_ORIGINS", "")
+ALLOWED_ORIGINS = _default_origins + [o.strip() for o in _extra.split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:5174", "tauri://localhost"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

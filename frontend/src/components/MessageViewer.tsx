@@ -136,7 +136,7 @@ export default function MessageViewer({ message, onClose, onReply, onReplyAll, o
                     </div>
                     <div className="header-actions">
                         <button className="btn-action" onClick={handleReply} title="Responder">↩️</button>
-                        <button className="btn-action" onClick={handleReplyAll} title="Responder a Todos">⏮️</button>
+                        <button className="btn-action" onClick={handleReplyAll} title="Responder a Todos">↩️👥</button>
                         <button className="btn-action" onClick={handleForward} title="Reenviar">➡️</button>
                         <button
                             className="btn-action btn-danger"

@@ -2,6 +2,7 @@
 MIME parsing service for email body and attachments.
 """
 import email
+import logging
 from email.message import Message as EmailMessage
 from email.header import decode_header
 from typing import List, Dict, Optional, Tuple
@@ -10,6 +11,8 @@ from pathlib import Path
 import uuid
 import base64
 import quopri
+
+logger = logging.getLogger(__name__)
 
 
 class MIMEParser:
@@ -103,7 +106,7 @@ class MIMEParser:
             except:
                 return payload.decode('utf-8', errors='ignore')
         except Exception as e:
-            print(f"Error decoding payload: {e}")
+            logger.error(f"Error decoding payload: {e}")
             return ""
     
     def _process_attachment(self, part: EmailMessage, is_inline: bool = False) -> Optional[Dict]:
@@ -145,7 +148,7 @@ class MIMEParser:
             }
         
         except Exception as e:
-            print(f"Error processing attachment: {e}")
+            logger.error(f"Error processing attachment '{filename}': {e}")
             return None
     
     def _decode_filename(self, filename: str) -> str:
@@ -199,5 +202,5 @@ def fetch_full_message(imap_connection, uid: int) -> Optional[bytes]:
         return None
     
     except Exception as e:
-        print(f"Error fetching full message {uid}: {e}")
+        logger.error(f"Error fetching full message UID {uid}: {e}")
         return None

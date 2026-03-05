@@ -69,18 +69,59 @@ async def start_sync(
     classified_count = 0
     should_classify = account.auto_classify or sync_request.auto_classify
     if should_classify and sync_result.get("status") == "success" and sync_result.get("new_messages", 0) > 0:
-        # Re-using previous logic (simplified for brevity because it's duplicated code)
-        # Ideally this should be a helper function 'auto_classify_messages'
-        # For now, I will keep the compatibility but I strongly suggest using /stream
         try:
-             # Just replicate the import and call for COMPATIBILITY
-             from app.services.rules_engine import classify_with_rules_and_ai
-             # ... (Full logic ommitted for brevity, but needed if we want to keep this working 100%)
-             # To avoid code duplication bloat in this replace block, 
-             # I will skip the full auto-classify logic here and assume frontend uses /stream.
-             pass 
-        except Exception:
-             pass
+            from app.services.rules_engine import classify_with_rules_and_ai
+            from app.models import Message, Classification, ServiceWhitelist, Category
+            
+            new_msg_ids = sync_result.get("new_message_ids", [])
+            
+            if new_msg_ids:
+                # Fetch whitelist + categories
+                wl_result = await db.execute(select(ServiceWhitelist).where(ServiceWhitelist.is_active == True))
+                whitelist_domains = [e.domain_pattern for e in wl_result.scalars().all()]
+                cat_result = await db.execute(select(Category))
+                categories = [{"key": c.key, "ai_instruction": c.ai_instruction} for c in cat_result.scalars().all()]
+
+                # Fetch only unclassified new messages
+                msg_result = await db.execute(
+                    select(Message)
+                    .outerjoin(Classification, Message.id == Classification.message_id)
+                    .where(Message.id.in_(new_msg_ids))
+                    .where(Classification.id == None)
+                )
+                msgs_to_classify = msg_result.scalars().all()
+
+                for msg in msgs_to_classify:
+                    try:
+                        msg_data = {
+                            "from_name": msg.from_name, "from_email": msg.from_email,
+                            "to_addresses": msg.to_addresses, "cc_addresses": msg.cc_addresses,
+                            "subject": msg.subject, "date": str(msg.date),
+                            "body_text": msg.body_text, "snippet": msg.snippet
+                        }
+                        result_cls = await classify_with_rules_and_ai(
+                            msg_data, whitelist_domains, categories,
+                            custom_classification_prompt=account.custom_classification_prompt
+                        )
+                        if result_cls.get("status") != "error":
+                            db.add(Classification(
+                                message_id=msg.id,
+                                gpt_label=result_cls.get("gpt_label"),
+                                gpt_confidence=result_cls.get("gpt_confidence"),
+                                gpt_rationale=result_cls.get("gpt_rationale"),
+                                qwen_label=result_cls.get("qwen_label"),
+                                qwen_confidence=result_cls.get("qwen_confidence"),
+                                qwen_rationale=result_cls.get("qwen_rationale"),
+                                final_label=result_cls["final_label"],
+                                final_reason=result_cls.get("final_reason"),
+                                decided_by=result_cls["decided_by"]
+                            ))
+                            classified_count += 1
+                    except Exception as e:
+                        logger.error(f"Error classifying message {msg.id}: {e}")
+                await db.commit()
+        except Exception as e:
+            logger.error(f"Auto-classify error in /start: {e}")
 
     # Audit log
     audit_log = AuditLog(

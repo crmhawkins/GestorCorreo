@@ -8,8 +8,9 @@ from typing import List
 import json
 
 from app.database import get_db
-from app.models import Message, Classification, ServiceWhitelist
+from app.models import Message, Classification, ServiceWhitelist, User
 from app.services.rules_engine import classify_with_rules_and_ai
+from app.dependencies import get_current_active_user
 
 
 router = APIRouter()
@@ -18,7 +19,8 @@ router = APIRouter()
 @router.post("/{message_id}")
 async def classify_message(
     message_id: str,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
 ):
     """
     Classify a single message using AI + rules.
@@ -118,7 +120,8 @@ async def classify_message(
 @router.post("/batch")
 async def classify_batch(
     message_ids: List[str],
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
 ):
     """
     Classify multiple messages in batch.

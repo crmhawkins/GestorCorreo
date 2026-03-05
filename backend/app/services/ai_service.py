@@ -1,6 +1,7 @@
 """
 AI classification service using Remote AI API.
 """
+import os
 import httpx
 import json
 from typing import Dict, Optional, Literal, List
@@ -391,26 +392,41 @@ async def review_with_gpt(
 
 
 async def _get_ai_config() -> Dict:
-    """Load AI configuration from database."""
+    """
+    Load AI configuration from database.
+    Falls back to environment variables if not configured in DB.
+    Environment variables: AI_API_URL, AI_API_KEY, AI_PRIMARY_MODEL, AI_SECONDARY_MODEL
+    """
+    import logging
+    _log = logging.getLogger(__name__)
+
+    # --- Env-var fallback (no hardcoded credentials) ---
+    def _env_defaults() -> Dict:
+        api_url = os.environ.get("AI_API_URL", "")
+        api_key = os.environ.get("AI_API_KEY", "")
+        primary = os.environ.get("AI_PRIMARY_MODEL", "gpt-oss:120b-cloud")
+        secondary = os.environ.get("AI_SECONDARY_MODEL", "qwen3-coder:480b-cloud")
+        if not api_url or not api_key:
+            _log.warning(
+                "No AI config found in DB and AI_API_URL / AI_API_KEY env vars are not set. "
+                "Classification will fail until AI is configured via Settings."
+            )
+        return {"api_url": api_url, "api_key": api_key,
+                "primary_model": primary, "secondary_model": secondary}
+
     try:
         from app.database import AsyncSessionLocal
         from app.models import AIConfig
         from sqlalchemy import select
-        
+
         async with AsyncSessionLocal() as db:
             result = await db.execute(select(AIConfig).limit(1))
             config = result.scalar_one_or_none()
-            
+
             if not config:
-                # Return defaults if not found
-                print("⚠️ Warning: No AI config found in database, using defaults")
-                return {
-                    "api_url": "https://192.168.1.45/chat/models",
-                    "api_key": "OllamaAPI_2024_K8mN9pQ2rS5tU7vW3xY6zA1bC4eF8hJ0lM",
-                    "primary_model": "gpt-oss:120b-cloud",
-                    "secondary_model": "qwen3-coder:480b-cloud"
-                }
-            
+                _log.warning("No AI config found in database, falling back to environment variables.")
+                return _env_defaults()
+
             return {
                 "api_url": config.api_url,
                 "api_key": config.api_key,
@@ -418,13 +434,8 @@ async def _get_ai_config() -> Dict:
                 "secondary_model": config.secondary_model
             }
     except Exception as e:
-        print(f"❌ Error loading AI config: {e}, using defaults")
-        return {
-            "api_url": "https://192.168.1.45/chat/models",
-            "api_key": "OllamaAPI_2024_K8mN9pQ2rS5tU7vW3xY6zA1bC4eF8hJ0lM",
-            "primary_model": "gpt-oss:120b-cloud",
-            "secondary_model": "qwen3-coder:480b-cloud"
-        }
+        _log.error(f"Error loading AI config from DB: {e}. Falling back to environment variables.")
+        return _env_defaults()
 
 
 async def classify_message(message_data: Dict, categories: List[Dict], custom_prompt: Optional[str] = None) -> Dict:

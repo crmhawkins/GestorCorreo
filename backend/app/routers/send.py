@@ -5,24 +5,28 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 import base64
+import json
+import logging
 
 from datetime import datetime
 import uuid
 
 from app.database import get_db
-from app.models import Account, Message
+from app.models import Account, Message, User
 from app.schemas import SendEmailRequest, SendEmailResponse
 from app.utils.security import decrypt_password
 from app.services.smtp_service import SMTPService
+from app.dependencies import get_current_active_user
 
-
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
 @router.post("/", response_model=SendEmailResponse)
 async def send_email(
     email_data: SendEmailRequest,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
 ):
     """
     Send an email via SMTP.
@@ -36,9 +40,12 @@ async def send_email(
     - **body_html**: HTML body
     - **attachments**: Optional list of attachments (base64 encoded)
     """
-    # Get account
+    # Get account — must belong to the authenticated user
     result = await db.execute(
-        select(Account).where(Account.id == email_data.account_id)
+        select(Account).where(
+            Account.id == email_data.account_id,
+            Account.user_id == current_user.id
+        )
     )
     account = result.scalar_one_or_none()
     
@@ -117,9 +124,9 @@ async def send_email(
             thread_id=msg_id,
             from_name=account.username,
             from_email=account.email_address,
-            to_addresses=str(email_data.to),
-            cc_addresses=str(email_data.cc) if email_data.cc else "[]",
-            bcc_addresses=str(email_data.bcc) if email_data.bcc else "[]",
+            to_addresses=json.dumps(email_data.to),
+            cc_addresses=json.dumps(email_data.cc) if email_data.cc else json.dumps([]),
+            bcc_addresses=json.dumps(email_data.bcc) if email_data.bcc else json.dumps([]),
             subject=email_data.subject,
             body_text=email_data.body_text,
             body_html=email_data.body_html,
@@ -135,6 +142,6 @@ async def send_email(
         
     except Exception as e:
         # Log error but don't fail since email was sent
-        print(f"Error saving sent message to DB: {e}")
+        logger.error(f"Error saving sent message to DB: {e}")
 
     return SendEmailResponse(**result)

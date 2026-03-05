@@ -119,7 +119,8 @@ async def list_messages(
             "is_read": message.is_read,
             "is_starred": message.is_starred,
             "has_attachments": message.has_attachments,
-            "classification_label": classification_label
+            "classification_label": classification_label,
+            "folder": message.folder if hasattr(message, 'folder') else 'INBOX'
         }
         messages.append(message_dict)
     

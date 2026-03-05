@@ -68,26 +68,8 @@ export interface AccountCreate {
 }
 
 export const getAccounts = async (deleted: boolean = false): Promise<Account[]> => {
-  try {
-    const response = await apiClient.get('/api/accounts/', { params: { deleted } });
-    return response.data;
-  } catch (error) {
-    console.warn('Backend unavailable. Returning mock account.');
-    return [{
-      id: 1,
-      email_address: 'ivan@hawkins.es',
-      imap_host: 'imap.hawkins.es',
-      imap_port: 993,
-      smtp_host: 'smtp.hawkins.es',
-      smtp_port: 587,
-      username: 'ivan@hawkins.es',
-      is_active: true,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      is_deleted: false,
-      protocol: 'imap'
-    }];
-  }
+  const response = await apiClient.get('/api/accounts/', { params: { deleted } });
+  return response.data;
 };
 
 export const deleteAccount = async (id: number, permanent: boolean = false) => {
@@ -144,45 +126,11 @@ export const updateAccount = async (id: number, data: Partial<AccountCreate> & {
 export const getMessages = async (params?: {
   account_id?: number;
   folder?: string;
-  classification_label?: string;  // Filter by classification category
+  classification_label?: string;
   search?: string;
 }): Promise<Message[]> => {
-  try {
-    const response = await apiClient.get('/api/messages/', { params });
-    return response.data;
-  } catch (error) {
-    console.warn('Backend unavailable. Returning mock messages.');
-    return [
-      {
-        id: '1',
-        account_id: 1,
-        from_email: 'noreply@google.com',
-        from_name: 'Google',
-        subject: 'Security Alert',
-        date: new Date().toISOString(),
-        snippet: 'New sign-in to your account...',
-        is_read: false,
-        is_starred: false,
-        has_attachments: false,
-        classification_label: 'Servicios',
-        folder: 'INBOX'
-      },
-      {
-        id: '2',
-        account_id: 1,
-        from_email: 'client@example.com',
-        from_name: 'Important Client',
-        subject: 'Project Proposal',
-        date: new Date().toISOString(),
-        snippet: 'Please find attached the proposal...',
-        is_read: true,
-        is_starred: true,
-        has_attachments: true,
-        classification_label: 'Interesantes',
-        folder: 'INBOX'
-      }
-    ];
-  }
+  const response = await apiClient.get('/api/messages/', { params });
+  return response.data;
 };
 
 export const getMessage = async (id: string): Promise<MessageDetail> => {

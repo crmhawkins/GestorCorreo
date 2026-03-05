@@ -71,6 +71,7 @@ class Message(Base):
     subject = Column(String)
     date = Column(DateTime)
     snippet = Column(Text)
+    folder = Column(String, default='INBOX')  # 'INBOX', 'Enviados', 'Deleted', etc.
     
     body_text = Column(Text)
     body_html = Column(Text)

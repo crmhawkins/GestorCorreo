@@ -655,7 +655,7 @@ const Dashboard: React.FC = () => {
                     >
                         🗑️ Mensajes eliminados
                         <span className="folder-count">
-                            <span className="total-count">{allMessages?.filter(m => m.folder === 'Deleted').length || 0}</span>
+                            <span className="total-count">{allMessages?.filter(m => m.classification_label === 'Deleted').length || 0}</span>
                         </span>
                     </div>
                 </div>

@@ -469,33 +469,37 @@ async def sync_account_messages(
         if account.protocol == 'pop3':
             logger.info(f"Using POP3 protocol for {account.email_address}")
             from app.services.pop3_service import POP3Service
-            
+
             pop3 = POP3Service(account, password)
-            
+
             yield {'status': 'connecting', 'message': f'Connecting to POP3 server {account.imap_host}...'}
-            
+
             if not await pop3.connect():
                 yield {'status': 'error', 'error': 'Failed to connect to POP3 server'}
                 return
-            
+
             yield {'status': 'connected', 'message': 'Connected to POP3 server'}
-            
+
             # Get message count
             message_count = await pop3.get_message_count()
             logger.info(f"Found {message_count} messages in POP3 mailbox")
-            
+
             # Retrieve UIDL map (msg_num -> uid)
             uid_map = await pop3.get_all_uidls()
             logger.info(f"Retrieved {len(uid_map)} UIDLs from server")
-            
-            # Load cached UIDs
+
+            # Load cached UIDs (already-seen messages)
             from pathlib import Path
             import json
-            
+
             cache_dir = Path(__file__).parent.parent.parent.parent / "data" / "cache"
             cache_dir.mkdir(parents=True, exist_ok=True)
             cache_file = cache_dir / f"pop3_uids_{account.id}.json"
-            
+
+            # Attachment storage dir (consistent with IMAP and MIMEParser)
+            attachments_dir = Path(__file__).parent.parent.parent.parent / "data" / "attachments"
+            attachments_dir.mkdir(parents=True, exist_ok=True)
+
             cached_uids = set()
             if cache_file.exists():
                 try:
@@ -504,34 +508,34 @@ async def sync_account_messages(
                     logger.info(f"Loaded {len(cached_uids)} cached UIDs")
                 except Exception as e:
                     logger.error(f"Failed to load UID cache: {e}")
-            
+
             # Determine new messages
             new_msg_nums = []
             for msg_num, uid in uid_map.items():
                 if uid not in cached_uids:
                     new_msg_nums.append((msg_num, uid))
-            
-            # Sort by msg_num
+
+            # Sort by msg_num (oldest first)
             new_msg_nums.sort(key=lambda x: x[0])
-            
+
             total_new = len(new_msg_nums)
             logger.info(f"Identified {total_new} truly new messages")
-            
+
             yield {
                 'status': 'found_messages',
                 'total': total_new,
                 'message': f'Found {total_new} new messages to download'
             }
-            
+
             # Fetch existing message IDs from database to avoid duplicates (double check)
             existing_result = await db.execute(
                 select(Message.message_id).where(Message.account_id == account.id)
             )
             existing_ids = {row[0] for row in existing_result.all()}
-            
+
             saved_count = 0
             new_message_ids = []
-            
+
             # Fetch and save NEW messages
             for index, (msg_num, uid) in enumerate(new_msg_nums):
                 yield {
@@ -540,118 +544,146 @@ async def sync_account_messages(
                     'total': total_new,
                     'message': f'Downloading new message {index + 1} of {total_new}...'
                 }
-                
-                # Fetch only headers first to check Message-ID duplication
-                # (Safety net in case UIDL is new but message ID exists e.g. from previous manual syncs)
-                headers = await pop3.fetch_headers_only(msg_num)
-                
-                if headers and headers['message_id'] in existing_ids:
-                    # It exists in DB but not in cache? Add to cache and skip.
+
+                try:
+                    # FIX 1: Initialize msg to None for each iteration
+                    msg = None
+
+                    # Fetch only headers first to check Message-ID for duplicates
+                    headers = await pop3.fetch_headers_only(msg_num)
+
+                    if headers and headers.get('message_id') in existing_ids:
+                        # Already in DB but not in cache — add to cache and skip
+                        cached_uids.add(uid)
+                        continue
+
+                    if not headers:
+                        # Fallback: full fetch to get headers
+                        msg = await pop3.fetch_message(msg_num)
+                        if not msg:
+                            logger.warning(f"Could not fetch POP3 message {msg_num}, skipping")
+                            continue
+                        headers = await pop3.get_message_headers(msg)
+
+                    if not headers:
+                        logger.warning(f"Could not extract headers for POP3 message {msg_num}, skipping")
+                        continue
+
+                    # FIX 2: Single fetch for body — reuse msg if already downloaded
+                    if msg is None:
+                        msg = await pop3.fetch_message(msg_num)
+                        if not msg:
+                            logger.warning(f"Could not fetch body for POP3 message {msg_num}, skipping")
+                            continue
+
+                    body_data = await pop3.get_message_body(msg)
+
+                    # Parse from address
+                    from_raw = headers.get('from', '')
+                    from_name, from_email_addr = '', from_raw
+                    if '<' in from_raw and '>' in from_raw:
+                        from_name = from_raw.split('<')[0].strip().strip('"')
+                        from_email_addr = from_raw.split('<')[1].split('>')[0].strip()
+
+                    body_text = body_data.get('body_text', '')
+                    body_html = body_data.get('body_html', '')
+                    att_list = body_data.get('attachments', [])
+
+                    # FIX 3: Real snippet from body, not subject
+                    real_snippet = (
+                        body_text[:200].replace('\n', ' ').strip()
+                        if body_text
+                        else (headers.get('subject', '')[:100])
+                    )
+
+                    # FIX 4: has_attachments based on real attachment count
+                    has_attachments = len(att_list) > 0
+
+                    message = Message(
+                        id=str(uuid.uuid4()),
+                        account_id=account.id,
+                        imap_uid=msg_num,  # POP3 msg_num (volatile, but best available)
+                        message_id=headers.get('message_id', ''),
+                        subject=headers.get('subject', ''),
+                        from_name=from_name,
+                        from_email=from_email_addr,
+                        to_addresses=json.dumps([headers['to']]) if headers.get('to') else json.dumps([]),
+                        cc_addresses=json.dumps([headers['cc']]) if headers.get('cc') else json.dumps([]),
+                        bcc_addresses=None,
+                        date=headers.get('date'),
+                        snippet=real_snippet,
+                        body_text=body_text,
+                        body_html=body_html,
+                        is_read=False,
+                        is_starred=False,
+                        has_attachments=has_attachments
+                    )
+
+                    db.add(message)
+
+                    # FIX 5: Save attachment files to disk (same logic as IMAP)
+                    if att_list:
+                        from app.models import Attachment as AttachmentModel
+                        for att_data in att_list:
+                            local_path = ''
+                            content = att_data.get('content')
+                            if content:
+                                try:
+                                    safe_name = att_data.get('filename', 'unknown').replace('/', '_').replace('\\', '_')
+                                    unique_name = f"{uuid.uuid4().hex}_{safe_name}"
+                                    file_path = attachments_dir / unique_name
+                                    with open(file_path, 'wb') as f:
+                                        f.write(content)
+                                    # Store relative to data/ (same format as IMAP path)
+                                    local_path = str(file_path.relative_to(attachments_dir.parent))
+                                    logger.debug(f"Saved POP3 attachment: {local_path}")
+                                except Exception as e:
+                                    logger.error(f"Failed to save POP3 attachment '{att_data.get('filename')}': {e}")
+
+                            attachment = AttachmentModel(
+                                message_id=message.id,
+                                filename=att_data.get('filename', 'unknown'),
+                                mime_type=att_data.get('mime_type'),
+                                size_bytes=att_data.get('size_bytes', 0),
+                                local_path=local_path
+                            )
+                            db.add(attachment)
+
+                    # FIX 6: Increment saved_count and track message ID
+                    saved_count += 1
+                    new_message_ids.append(message.id)
                     cached_uids.add(uid)
+
+                    # Commit every 5 messages
+                    if saved_count % 5 == 0:
+                        await db.commit()
+                        try:
+                            with open(cache_file, 'w') as f:
+                                json.dump(list(cached_uids), f)
+                        except Exception as e:
+                            logger.error(f"Failed to save UID cache: {e}")
+
+                except Exception as e:
+                    logger.error(f"Error processing POP3 message {msg_num} (uid={uid}): {e}")
                     continue
 
-                if not headers:
-                     # Fallback to full fetch
-                     msg = await pop3.fetch_message(msg_num)
-                     if not msg: continue
-                     headers = await pop3.get_message_headers(msg)
-                
-                body_data = await pop3.fetch_message(msg_num) # Re-fetch full for body (optimization: fetch_message_body logic inside fetch_message?)
-                # Wait, pop3.fetch_message returns 'msg' object, then we call get_message_body(msg)
-                # Correction:
-                msg = await pop3.fetch_message(msg_num)
-                if not msg: continue
-                body_data = await pop3.get_message_body(msg)
-                
-                # ... same saving logic ...
-                # Create message record
-                from_name, from_email = '', headers['from']
-                if '<' in headers['from'] and '>' in headers['from']:
-                    from_name = headers['from'].split('<')[0].strip().strip('"')
-                    from_email = headers['from'].split('<')[1].split('>')[0].strip()
-                
-                message = Message(
-                    id=str(uuid.uuid4()),
-                    account_id=account.id,
-                    imap_uid=msg_num,  # We can store msg_num, but it's volatile.
-                    message_id=headers['message_id'],
-                    subject=headers['subject'],
-                    from_name=from_name,
-                    from_email=from_email,
-                    to_addresses=json.dumps([headers['to']]) if headers['to'] else json.dumps([]),
-                    cc_addresses=json.dumps([headers['cc']]) if headers.get('cc') else json.dumps([]),
-                    bcc_addresses=None,
-                    date=headers['date'],
-                    body_text=body_data.get('body_text'),
-                    body_html=body_data.get('body_html'),
-                    is_read=False,
-                    is_starred=False,
-                    has_attachments=len(body_data.get('attachments', [])) > 0
-                )
-                
-                db.add(message)
-                saved_count += 1
-                new_message_ids.append(message.id)
-                
-                # Add to cache
-                cached_uids.add(uid)
-                
-                # Save attachments
-                if body_data.get('attachments'):
-                    from app.models import Attachment
-                    from pathlib import Path
-                    
-                    attachments_dir = Path(__file__).parent.parent.parent.parent / "data" / "attachments"
-                    attachments_dir.mkdir(parents=True, exist_ok=True)
-                    
-                    for att_data in body_data['attachments']:
-                        local_path = ''
-                        if att_data.get('content'):
-                            try:
-                                safe_filename = att_data.get('filename', 'unknown').replace('/', '_').replace('\\', '_')
-                                unique_filename = f"{uuid.uuid4().hex}_{safe_filename}"
-                                file_path = attachments_dir / unique_filename
-                                with open(file_path, 'wb') as f:
-                                    f.write(att_data['content'])
-                                local_path = str(file_path.relative_to(attachments_dir.parent))
-                            except Exception as e:
-                                logger.error(f"Failed to save attachment: {e}")
-
-                        attachment = Attachment(
-                            message_id=message.id,
-                            filename=att_data.get('filename', 'unknown'),
-                            mime_type=att_data.get('mime_type'),
-                            size_bytes=att_data.get('size_bytes', 0),
-                            local_path=local_path
-                        )
-                        db.add(attachment)
-                
-                # Commit period
-                if saved_count % 5 == 0:
-                    await db.commit()
-                    # Also save cache periodically
-                    try:
-                        with open(cache_file, 'w') as f:
-                            json.dump(list(cached_uids), f)
-                    except Exception as e:
-                        logger.error(f"Failed to save cache: {e}")
-            
             # Final commit and cache save
             await db.commit()
             try:
                 with open(cache_file, 'w') as f:
                     json.dump(list(cached_uids), f)
             except Exception as e:
-                logger.error(f"Failed to save final cache: {e}")
+                logger.error(f"Failed to save final UID cache: {e}")
 
             await pop3.disconnect()
-            
+
             logger.info(f"POP3 sync completed: {saved_count} new messages saved")
-            
+
             yield {
                 'status': 'success',
                 'new_messages': saved_count,
-                'new_message_ids': new_message_ids
+                'new_message_ids': new_message_ids,
+                'total_messages': message_count
             }
             return
 
@@ -713,12 +745,11 @@ async def sync_account_messages(
         last_message = result.scalar_one_or_none()
         last_uid = last_message.imap_uid if last_message else 0
         
-        with open("d:\\proyectos\\programasivan\\Mail\\debug_sync.txt", "a") as f:
-            f.write(f"DEBUG: Account {account.id} ({account.email_address}) - Last UID in DB: {last_uid}\n")
-            if last_message:
-                 f.write(f"DEBUG: Found message ID {last_message.id} with UID {last_message.imap_uid}\n")
-            else:
-                 f.write("DEBUG: No last message found\n")
+        logger.debug(f"Account {account.id} ({account.email_address}) - Last UID in DB: {last_uid}")
+        if last_message:
+            logger.debug(f"Found message ID {last_message.id} with UID {last_message.imap_uid}")
+        else:
+            logger.debug("No last message found in DB for this account")
         
         logger.info(f"Last synced UID for {account.email_address}: {last_uid}")
         
@@ -783,7 +814,8 @@ async def sync_account_messages(
                     to_addresses=headers['to_addresses'],
                     cc_addresses=headers['cc_addresses'],
                     date=headers['date'],
-                    snippet=headers['snippet'],
+                    # Snippet: primera línea del cuerpo real (o asunto como fallback)
+                    snippet=(body_text[:200].replace('\n', ' ').strip() if body_text else headers['snippet']),
                     body_text=body_text,
                     body_html=body_html,
                     is_read=False,
