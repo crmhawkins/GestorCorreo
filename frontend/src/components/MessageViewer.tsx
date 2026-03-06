@@ -22,9 +22,10 @@ interface MessageViewerProps {
     onReply?: (message: Message) => void
     onReplyAll?: (message: Message | MessageDetail) => void
     onForward?: (message: Message) => void
+    inline?: boolean
 }
 
-export default function MessageViewer({ message, onClose, onReply, onReplyAll, onForward }: MessageViewerProps) {
+export default function MessageViewer({ message, inline, onClose, onReply, onReplyAll, onForward }: MessageViewerProps) {
     const [loading, setLoading] = useState(true)
     const [showHtml, setShowHtml] = useState(true)
     const [messageDetails, setMessageDetails] = useState<MessageDetail | null>(null)
@@ -107,100 +108,114 @@ export default function MessageViewer({ message, onClose, onReply, onReplyAll, o
     const bodyHtml = messageDetails?.body_html
     const bodyText = messageDetails?.body_text
 
+    const content = (
+        <>
+            <div className="message-viewer-header">
+                <div className="message-header-info">
+                    <h2>{message.subject || '(Sin asunto)'}</h2>
+                    <div className="message-meta-info">
+                        <div className="from-info">
+                            <strong>De:</strong> {message.from_name} &lt;{message.from_email}&gt;
+                        </div>
+                        {messageDetails && (
+                            <div className="to-info">
+                                <strong>Para:</strong> {(() => {
+                                    try {
+                                        const tos = JSON.parse(messageDetails.to_addresses || '[]');
+                                        return Array.isArray(tos) ? tos.join(', ') : messageDetails.to_addresses;
+                                    } catch (e) {
+                                        return messageDetails.to_addresses;
+                                    }
+                                })()}
+                            </div>
+                        )}
+                        <div className="date-info">
+                            <strong>Fecha:</strong> {formatDate(message.date)}
+                        </div>
+                    </div>
+                </div>
+                <div className="header-actions">
+                    <button className="btn-action" onClick={handleReply} title="Responder">↩️</button>
+                    <button className="btn-action" onClick={handleReplyAll} title="Responder a Todos">↩️👥</button>
+                    <button className="btn-action" onClick={handleForward} title="Reenviar">➡️</button>
+                    <button
+                        className="btn-action btn-danger"
+                        onClick={(e) => { e.stopPropagation(); handleDelete(); }}
+                        title="Eliminar"
+                    >
+                        🗑️
+                    </button>
+                    <button className="close-btn" onClick={onClose}>×</button>
+                </div>
+            </div>
+
+            <div className="message-viewer-body">
+                {loading ? (
+                    <div className="loading-state">Cargando mensaje...</div>
+                ) : loadError ? (
+                    <div className="error-state" style={{ padding: '1rem', color: '#c62828', background: '#ffebee', borderRadius: '4px' }}>
+                        ⚠️ {loadError}
+                        <button onClick={loadMessageContent} style={{ marginLeft: '1rem', cursor: 'pointer' }}>Reintentar</button>
+                    </div>
+                ) : (
+                    <>
+                        {bodyHtml && bodyText && (
+                            <div className="body-toggle">
+                                <button className={showHtml ? 'active' : ''} onClick={() => setShowHtml(true)}>HTML</button>
+                                <button className={!showHtml ? 'active' : ''} onClick={() => setShowHtml(false)}>Texto</button>
+                            </div>
+                        )}
+
+                        <div className="message-content">
+                            {showHtml && bodyHtml ? (
+                                <div
+                                    className="html-content"
+                                    dangerouslySetInnerHTML={{ __html: sanitizeHtml(bodyHtml) }}
+                                />
+                            ) : (
+                                <pre className="text-content">{bodyText || 'Sin contenido'}</pre>
+                            )}
+                        </div>
+
+                        {attachments.length > 0 && (
+                            <div className="attachments-section">
+                                <h3>Adjuntos ({attachments.length})</h3>
+                                <div className="attachments-list">
+                                    {attachments.map((attachment) => (
+                                        <a
+                                            key={attachment.id}
+                                            href={getAttachmentDownloadUrl(attachment.id)}
+                                            download={attachment.filename}
+                                            className="attachment-item"
+                                        >
+                                            <span className="attachment-icon">📎</span>
+                                            <div className="attachment-info">
+                                                <div className="attachment-name">{attachment.filename}</div>
+                                                <div className="attachment-size">{formatFileSize(attachment.size_bytes)}</div>
+                                            </div>
+                                        </a>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </>
+                )}
+            </div>
+        </>
+    )
+
+    if (inline) {
+        return (
+            <div className="message-viewer inline-viewer">
+                {content}
+            </div>
+        )
+    }
+
     return (
         <div className="message-viewer-overlay" onClick={onClose}>
-            <div className="message-viewer" onClick={(e) => e.stopPropagation()}>
-                <div className="message-viewer-header">
-                    <div className="message-header-info">
-                        <h2>{message.subject || '(Sin asunto)'}</h2>
-                        <div className="message-meta-info">
-                            <div className="from-info">
-                                <strong>De:</strong> {message.from_name} &lt;{message.from_email}&gt;
-                            </div>
-                            {messageDetails && (
-                                <div className="to-info">
-                                    <strong>Para:</strong> {(() => {
-                                        try {
-                                            const tos = JSON.parse(messageDetails.to_addresses || '[]');
-                                            return Array.isArray(tos) ? tos.join(', ') : messageDetails.to_addresses;
-                                        } catch (e) {
-                                            return messageDetails.to_addresses;
-                                        }
-                                    })()}
-                                </div>
-                            )}
-                            <div className="date-info">
-                                <strong>Fecha:</strong> {formatDate(message.date)}
-                            </div>
-                        </div>
-                    </div>
-                    <div className="header-actions">
-                        <button className="btn-action" onClick={handleReply} title="Responder">↩️</button>
-                        <button className="btn-action" onClick={handleReplyAll} title="Responder a Todos">↩️👥</button>
-                        <button className="btn-action" onClick={handleForward} title="Reenviar">➡️</button>
-                        <button
-                            className="btn-action btn-danger"
-                            onClick={(e) => { e.stopPropagation(); handleDelete(); }}
-                            title="Eliminar"
-                        >
-                            🗑️
-                        </button>
-                        <button className="close-btn" onClick={onClose}>×</button>
-                    </div>
-                </div>
-
-                <div className="message-viewer-body">
-                    {loading ? (
-                        <div className="loading-state">Cargando mensaje...</div>
-                    ) : loadError ? (
-                        <div className="error-state" style={{ padding: '1rem', color: '#c62828', background: '#ffebee', borderRadius: '4px' }}>
-                            ⚠️ {loadError}
-                            <button onClick={loadMessageContent} style={{ marginLeft: '1rem', cursor: 'pointer' }}>Reintentar</button>
-                        </div>
-                    ) : (
-                        <>
-                            {bodyHtml && bodyText && (
-                                <div className="body-toggle">
-                                    <button className={showHtml ? 'active' : ''} onClick={() => setShowHtml(true)}>HTML</button>
-                                    <button className={!showHtml ? 'active' : ''} onClick={() => setShowHtml(false)}>Texto</button>
-                                </div>
-                            )}
-
-                            <div className="message-content">
-                                {showHtml && bodyHtml ? (
-                                    <div
-                                        className="html-content"
-                                        dangerouslySetInnerHTML={{ __html: sanitizeHtml(bodyHtml) }}
-                                    />
-                                ) : (
-                                    <pre className="text-content">{bodyText || 'Sin contenido'}</pre>
-                                )}
-                            </div>
-
-                            {attachments.length > 0 && (
-                                <div className="attachments-section">
-                                    <h3>Adjuntos ({attachments.length})</h3>
-                                    <div className="attachments-list">
-                                        {attachments.map((attachment) => (
-                                            <a
-                                                key={attachment.id}
-                                                href={getAttachmentDownloadUrl(attachment.id)}
-                                                download={attachment.filename}
-                                                className="attachment-item"
-                                            >
-                                                <span className="attachment-icon">📎</span>
-                                                <div className="attachment-info">
-                                                    <div className="attachment-name">{attachment.filename}</div>
-                                                    <div className="attachment-size">{formatFileSize(attachment.size_bytes)}</div>
-                                                </div>
-                                            </a>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-                        </>
-                    )}
-                </div>
+            <div className="message-viewer popup-viewer" onClick={(e) => e.stopPropagation()}>
+                {content}
             </div>
         </div>
     )

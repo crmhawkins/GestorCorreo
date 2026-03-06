@@ -8,9 +8,9 @@ from typing import List
 import json
 
 from app.database import get_db
-from app.models import Message, Classification, ServiceWhitelist, User
-from app.services.rules_engine import classify_with_rules_and_ai
+from app.models import Message, Classification, User, Account
 from app.dependencies import get_current_active_user
+from app.services.scheduler import run_classification
 
 
 router = APIRouter()
@@ -27,17 +27,21 @@ async def classify_message(
     
     Returns classification result and saves to database.
     """
-    # Get message
+    # Get message and its account
     result = await db.execute(
-        select(Message).where(Message.id == message_id)
+        select(Message, Account)
+        .join(Account, Message.account_id == Account.id)
+        .where(Message.id == message_id)
     )
-    message = result.scalar_one_or_none()
+    row = result.first()
     
-    if not message:
+    if not row:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Message not found"
         )
+        
+    message, account = row
     
     # Check if already classified
     result = await db.execute(
@@ -54,57 +58,26 @@ async def classify_message(
             }
         }
     
-    # Get whitelist domains
-    result = await db.execute(
-        select(ServiceWhitelist).where(ServiceWhitelist.is_active == True)
-    )
-    whitelist_entries = result.scalars().all()
-    whitelist_domains = [entry.domain_pattern for entry in whitelist_entries]
+    # Run central classification logic
+    count = await run_classification(db, account, [message_id])
     
-    # Prepare message data
-    message_data = {
-        "from_name": message.from_name,
-        "from_email": message.from_email,
-        "to_addresses": message.to_addresses,
-        "cc_addresses": message.cc_addresses,
-        "subject": message.subject,
-        "date": str(message.date),
-        "body_text": message.body_text,
-        "snippet": message.snippet
-    }
-    
-    # Classify
-    # Classify
-    from app.models import Category
-    cat_result = await db.execute(select(Category))
-    categories_db = cat_result.scalars().all()
-    categories = [{"key": c.key, "ai_instruction": c.ai_instruction} for c in categories_db]
-
-    classification_result = await classify_with_rules_and_ai(message_data, whitelist_domains, categories)
-    
-    if classification_result.get("status") == "error":
+    if count == 0:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=classification_result.get("error", "Classification failed")
+            detail="Classification failed or skipped"
         )
     
-    # Save classification
-    classification = Classification(
-        message_id=message_id,
-        gpt_label=classification_result.get("gpt_label"),
-        gpt_confidence=classification_result.get("gpt_confidence"),
-        gpt_rationale=classification_result.get("gpt_rationale"),
-        qwen_label=classification_result.get("qwen_label"),
-        qwen_confidence=classification_result.get("qwen_confidence"),
-        qwen_rationale=classification_result.get("qwen_rationale"),
-        final_label=classification_result["final_label"],
-        final_reason=classification_result.get("final_reason"),
-        decided_by=classification_result["decided_by"]
+    # Fetch the newly created classification
+    result = await db.execute(
+        select(Classification).where(Classification.message_id == message_id)
     )
+    classification = result.scalar_one_or_none()
     
-    db.add(classification)
-    await db.commit()
-    await db.refresh(classification)
+    if not classification:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve classification result"
+        )
     
     return {
         "message": "Classification successful",
@@ -126,25 +99,49 @@ async def classify_batch(
     """
     Classify multiple messages in batch.
     """
+    if not message_ids:
+        return {"total": 0, "results": []}
+
+    # Fetch messages and their accounts
+    result = await db.execute(
+        select(Message, Account)
+        .join(Account, Message.account_id == Account.id)
+        .where(Message.id.in_(message_ids))
+    )
+    rows = result.all()
+    
+    # Group by account
+    accounts_messages = {}
+    for msg, acc in rows:
+        if acc.id not in accounts_messages:
+            accounts_messages[acc.id] = {"account": acc, "message_ids": []}
+        accounts_messages[acc.id]["message_ids"].append(msg.id)
+        
+    total_classified = 0
     results = []
     
-    for message_id in message_ids:
+    for account_id, data in accounts_messages.items():
         try:
-            result = await classify_message(message_id, db)
-            results.append({
-                "message_id": message_id,
-                "status": "success",
-                "result": result
-            })
+            count = await run_classification(db, data["account"], data["message_ids"])
+            total_classified += count
+            
+            for m_id in data["message_ids"]:
+                results.append({
+                    "message_id": m_id,
+                    "status": "processed via batch"
+                })
         except Exception as e:
-            results.append({
-                "message_id": message_id,
-                "status": "error",
-                "error": str(e)
-            })
+            for m_id in data["message_ids"]:
+                results.append({
+                    "message_id": m_id,
+                    "status": "error",
+                    "error": str(e)
+                })
     
     return {
+        "status": "success",
         "total": len(message_ids),
+        "classified": total_classified,
         "results": results
     }
 

@@ -65,61 +65,15 @@ async def start_sync(
     if not sync_result:
         sync_result = {'status': 'error', 'error': 'Sync produced no result'}
 
-    # Auto-classify new messages if requested or enabled in account
+    # Auto-classify new messages
     classified_count = 0
-    should_classify = account.auto_classify or sync_request.auto_classify
-    if should_classify and sync_result.get("status") == "success" and sync_result.get("new_messages", 0) > 0:
+    if sync_result.get("status") == "success" and sync_result.get("new_messages", 0) > 0:
         try:
-            from app.services.rules_engine import classify_with_rules_and_ai
-            from app.models import Message, Classification, ServiceWhitelist, Category
+            from app.services.scheduler import run_classification
             
             new_msg_ids = sync_result.get("new_message_ids", [])
-            
             if new_msg_ids:
-                # Fetch whitelist + categories
-                wl_result = await db.execute(select(ServiceWhitelist).where(ServiceWhitelist.is_active == True))
-                whitelist_domains = [e.domain_pattern for e in wl_result.scalars().all()]
-                cat_result = await db.execute(select(Category))
-                categories = [{"key": c.key, "ai_instruction": c.ai_instruction} for c in cat_result.scalars().all()]
-
-                # Fetch only unclassified new messages
-                msg_result = await db.execute(
-                    select(Message)
-                    .outerjoin(Classification, Message.id == Classification.message_id)
-                    .where(Message.id.in_(new_msg_ids))
-                    .where(Classification.id == None)
-                )
-                msgs_to_classify = msg_result.scalars().all()
-
-                for msg in msgs_to_classify:
-                    try:
-                        msg_data = {
-                            "from_name": msg.from_name, "from_email": msg.from_email,
-                            "to_addresses": msg.to_addresses, "cc_addresses": msg.cc_addresses,
-                            "subject": msg.subject, "date": str(msg.date),
-                            "body_text": msg.body_text, "snippet": msg.snippet
-                        }
-                        result_cls = await classify_with_rules_and_ai(
-                            msg_data, whitelist_domains, categories,
-                            custom_classification_prompt=account.custom_classification_prompt
-                        )
-                        if result_cls.get("status") != "error":
-                            db.add(Classification(
-                                message_id=msg.id,
-                                gpt_label=result_cls.get("gpt_label"),
-                                gpt_confidence=result_cls.get("gpt_confidence"),
-                                gpt_rationale=result_cls.get("gpt_rationale"),
-                                qwen_label=result_cls.get("qwen_label"),
-                                qwen_confidence=result_cls.get("qwen_confidence"),
-                                qwen_rationale=result_cls.get("qwen_rationale"),
-                                final_label=result_cls["final_label"],
-                                final_reason=result_cls.get("final_reason"),
-                                decided_by=result_cls["decided_by"]
-                            ))
-                            classified_count += 1
-                    except Exception as e:
-                        logger.error(f"Error classifying message {msg.id}: {e}")
-                await db.commit()
+                classified_count = await run_classification(db, account, new_msg_ids)
         except Exception as e:
             logger.error(f"Auto-classify error in /start: {e}")
 
@@ -189,84 +143,17 @@ async def stream_sync(
                     if progress.get('status') in ['success', 'error']:
                         sync_final_result = progress
 
-                # 2. Auto-Classify Phase
-                should_classify = account.auto_classify or sync_request.auto_classify
-                if should_classify and sync_final_result and sync_final_result.get("status") == "success" and sync_final_result.get("new_messages", 0) > 0:
-                    yield f"data: {json.dumps({'status': 'classifying', 'message': 'Auto-classifying new messages...'})}\n\n"
+                # 2. Auto-Classify Phase (Always classify automatically)
+                if sync_final_result and sync_final_result.get("status") == "success" and sync_final_result.get("new_messages", 0) > 0:
+                    yield f"data: {json.dumps({'status': 'classifying', 'message': 'Asignando categorias a los nuevos mensajes...'})}\n\n"
                     
                     try:
-                        from app.models import Message, Classification, ServiceWhitelist, Category
-                        from app.services.rules_engine import classify_with_rules_and_ai
+                        from app.services.scheduler import run_classification
                         
-                        # Fetch messages
-                        # Only fetch the messages that were just downloaded
                         new_msg_ids = sync_final_result.get("new_message_ids", [])
-                        
-                        if not new_msg_ids:
-                            # Should not match normally if new_messages > 0 but safety check
-                            new_messages = []
-                        else:
-                            result = await db.execute(
-                                select(Message)
-                                .outerjoin(Classification, Message.id == Classification.message_id)
-                                .where(Message.id.in_(new_msg_ids))
-                                .where(Classification.id == None)
-                            )
-                            new_messages = result.scalars().all()
-                        
-                        # If for some reason list is empty (e.g. race condition or already classified?)
-                        # Fallback to logic only if strictly needed, but better to trust IDs.
-
-                        total_to_classify = len(new_messages)
-                        
-                        if total_to_classify > 0:
-                            # Get resources
-                            result = await db.execute(select(ServiceWhitelist).where(ServiceWhitelist.is_active == True))
-                            whitelist_domains = [e.domain_pattern for e in result.scalars().all()]
-                            
-                            result = await db.execute(select(Category))
-                            categories = [{"key": c.key, "ai_instruction": c.ai_instruction} for c in result.scalars().all()]
-                            
-                            for i, message in enumerate(new_messages):
-                                yield f"data: {json.dumps({'status': 'classifying_progress', 'current': i+1, 'total': total_to_classify, 'message': f'Classifying {i+1}/{total_to_classify}'})}\n\n"
-                                try:
-                                    # Classify logic (copied from original)
-                                    message_data = {
-                                        "from_name": message.from_name,
-                                        "from_email": message.from_email,
-                                        "to_addresses": message.to_addresses,
-                                        "cc_addresses": message.cc_addresses,
-                                        "subject": message.subject,
-                                        "date": str(message.date),
-                                        "body_text": message.body_text,
-                                        "snippet": message.snippet
-                                    }
-                                    classification_result = await classify_with_rules_and_ai(
-                                        message_data, 
-                                        whitelist_domains, 
-                                        categories,
-                                        custom_classification_prompt=account.custom_classification_prompt
-                                    )
-                                    
-                                    if classification_result.get("status") != "error":
-                                        classification = Classification(
-                                            message_id=message.id,
-                                            gpt_label=classification_result.get("gpt_label"),
-                                            gpt_confidence=classification_result.get("gpt_confidence"),
-                                            gpt_rationale=classification_result.get("gpt_rationale"),
-                                            qwen_label=classification_result.get("qwen_label"),
-                                            qwen_confidence=classification_result.get("qwen_confidence"),
-                                            qwen_rationale=classification_result.get("qwen_rationale"),
-                                            final_label=classification_result["final_label"],
-                                            final_reason=classification_result.get("final_reason"),
-                                            decided_by=classification_result["decided_by"]
-                                        )
-                                        db.add(classification)
-                                        classified_count += 1
-                                except Exception as e:
-                                    logger.error(f"Error classifying message {message.id}: {e}")
-                            
-                            await db.commit()
+                        if new_msg_ids:
+                            classified_count = await run_classification(db, account, new_msg_ids)
+                            yield f"data: {json.dumps({'status': 'classifying_progress', 'current': classified_count, 'total': len(new_msg_ids), 'message': f'Classified {classified_count}/{len(new_msg_ids)}'})}\n\n"
                     except Exception as e:
                         logger.error(f"Auto-classify error: {e}")
                         yield f"data: {json.dumps({'status': 'warning', 'message': 'Auto-classification failed'})}\n\n"

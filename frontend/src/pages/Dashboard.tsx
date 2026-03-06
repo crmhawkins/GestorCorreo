@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import '../App.css'
 import { useAccounts, useMessages, useBulkMarkAsRead, useCategories, streamSync, useEmptyFolder, useDeleteAccount, useRestoreAccount, useToggleStar, useUpdateClassification, useDeleteMessage } from '../hooks/useApi'
 import { useQueryClient } from '@tanstack/react-query'
-import { apiClient, resyncMessageBodies, resyncMessageAttachments } from '../services/api'
+import { resyncMessageBodies, resyncMessageAttachments } from '../services/api'
 import type { Message, MessageDetail } from '../services/api'
 
 import AccountManager from '../components/AccountManager'
@@ -25,12 +25,12 @@ const Dashboard: React.FC = () => {
     const queryClient = useQueryClient()
     const [selectedAccount, setSelectedAccount] = useState<number | null>(null)
     const [showAccountManager, setShowAccountManager] = useState(false)
-    const [selectedMessage, setSelectedMessage] = useState<Message | null>(null)
+    const [activeMessage, setActiveMessage] = useState<Message | null>(null)
+    const [modalMessage, setModalMessage] = useState<Message | null>(null)
     const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all')
     const [showComposer, setShowComposer] = useState(false)
 
     const [showSettings, setShowSettings] = useState(false)
-    const [bulkClassifying, setBulkClassifying] = useState(false)
     const [isResyncingBodies, setIsResyncingBodies] = useState(false)
     const [isResyncingAttachments, setIsResyncingAttachments] = useState(false)
     const [composerMode, setComposerMode] = useState<'new' | 'reply' | 'reply_all' | 'forward'>('new')
@@ -121,7 +121,7 @@ const Dashboard: React.FC = () => {
     }, [selectedAccount, accounts, syncState]) // Re-run if account updates or sync state changes
 
     // Query para mensajes filtrados (lo que se muestra en pantalla)
-    const { data: messages, isLoading: messagesLoading, refetch: refetchMessages } = useMessages(
+    const { data: messages, isLoading: messagesLoading } = useMessages(
         selectedAccount ? {
             account_id: selectedAccount,
             classification_label: (searchFilters.search_all) ? undefined : ((categoryFilter === 'all') ? 'INBOX' : ((categoryFilter !== 'starred' && categoryFilter !== 'deleted' && categoryFilter !== 'enviados') ? categoryFilter : undefined)),
@@ -311,7 +311,11 @@ const Dashboard: React.FC = () => {
     }
 
     const handleMessageClick = (message: Message) => {
-        setSelectedMessage(message)
+        setActiveMessage(message)
+    }
+
+    const handleMessageDoubleClick = (message: Message) => {
+        setModalMessage(message)
     }
 
     const handleReply = (message: Message) => {
@@ -336,59 +340,6 @@ const Dashboard: React.FC = () => {
         setComposerMode('new')
         setComposerOriginalMessage(null)
         setShowComposer(true)
-    }
-
-    const handleBulkClassify = async () => {
-        if (!selectedAccount) return
-
-        setBulkClassifying(true)
-        showInfo('Starting bulk classification...')
-
-        try {
-            // Get all unclassified messages (from entire account, not just current view)
-            const unclassifiedMessages = allMessages?.filter(m => !m.classification_label) || []
-
-            if (unclassifiedMessages.length === 0) {
-                showInfo('No unclassified messages found')
-                setBulkClassifying(false)
-                return
-            }
-
-            let classified = 0
-            let failed = 0
-
-            // Classify in batches of 5 to avoid overwhelming the server
-            for (let i = 0; i < unclassifiedMessages.length; i += 5) {
-                const batch = unclassifiedMessages.slice(i, i + 5)
-
-                await Promise.allSettled(
-                    batch.map(async (msg) => {
-                        try {
-                            await apiClient.post(`/api/classify/${msg.id}`)
-                            classified++
-                        } catch (error) {
-                            failed++
-                        }
-                    })
-                )
-
-                // Update progress
-                const progress = Math.min(i + 5, unclassifiedMessages.length)
-                showInfo(`Classifying... ${progress}/${unclassifiedMessages.length}`)
-            }
-
-            // Reload messages to show updated classifications
-            // Reload messages and counters
-            await refetchMessages()
-            queryClient.invalidateQueries({ queryKey: ['messages'] })
-            queryClient.invalidateQueries({ queryKey: ['accounts'] })
-
-            showSuccess(`Bulk classification complete! Classified: ${classified}, Failed: ${failed}`)
-        } catch (error: any) {
-            showError('Bulk classification failed')
-        } finally {
-            setBulkClassifying(false)
-        }
     }
 
     const handleMarkAllRead = async () => {
@@ -472,7 +423,7 @@ const Dashboard: React.FC = () => {
         return (
             <div className="app">
                 <header className="app-header">
-                    <h1>📧 Hawkins Mail <span style={{ fontSize: '0.7rem', color: '#aaa', fontWeight: 'normal' }}>v.0.1</span></h1>
+                    <h1>📧 Hawkins Mail <span style={{ fontSize: '0.7rem', color: '#aaa', fontWeight: 'normal' }}>v.02</span></h1>
                     <p className="subtitle">No accounts configured</p>
                     <button onClick={logout} style={{ fontSize: '0.8rem', padding: '0.3rem' }}>Logout ({user?.username})</button>
                 </header>
@@ -497,7 +448,7 @@ const Dashboard: React.FC = () => {
             <aside className="sidebar">
                 <div className="sidebar-header">
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
-                        <h2>📧 Hawkins <span style={{ fontSize: '0.6rem', color: '#aaa', fontWeight: 'normal', verticalAlign: 'middle' }}>v.0.1</span></h2>
+                        <h2>📧 Hawkins <span style={{ fontSize: '0.6rem', color: '#aaa', fontWeight: 'normal', verticalAlign: 'middle' }}>v.02</span></h2>
                         {user?.is_admin && <button onClick={() => navigate('/admin')} style={{ fontSize: '0.8rem', padding: '0.2rem', cursor: 'pointer' }} title="Admin Area">🔑</button>}
                     </div>
                     <div style={{ fontSize: '0.8rem', color: '#888', marginBottom: '0.5rem' }}>
@@ -674,14 +625,6 @@ const Dashboard: React.FC = () => {
                         </button>
                         <button
                             className="btn-toolbar"
-                            onClick={handleBulkClassify}
-                            disabled={!selectedAccount || bulkClassifying}
-                            title="Classify all unclassified messages with AI"
-                        >
-                            {bulkClassifying ? '⏳ Analizando...' : '🤖 Clasificar Todo'}
-                        </button>
-                        <button
-                            className="btn-toolbar"
                             onClick={handleMarkAllRead}
                             disabled={!selectedAccount}
                             title="Mark all messages in this folder as read"
@@ -743,10 +686,28 @@ const Dashboard: React.FC = () => {
                             {messagesLoading ? (
                                 <div className="loading-state">Cargando mensajes...</div>
                             ) : (
-                                <MessageList
-                                    messages={messages || []}
-                                    onMessageClick={handleMessageClick}
-                                />
+                                <div className="content-split-pane">
+                                    <div className={`list-pane ${activeMessage ? 'split' : ''}`}>
+                                        <MessageList
+                                            messages={messages || []}
+                                            onMessageClick={handleMessageClick}
+                                            onMessageDoubleClick={handleMessageDoubleClick}
+                                            activeMessageId={activeMessage?.id}
+                                        />
+                                    </div>
+                                    {activeMessage && (
+                                        <div className="detail-pane">
+                                            <MessageViewer
+                                                message={activeMessage}
+                                                onClose={() => setActiveMessage(null)}
+                                                onReply={handleReply}
+                                                onReplyAll={handleReplyAll}
+                                                onForward={handleForward}
+                                                inline={true}
+                                            />
+                                        </div>
+                                    )}
+                                </div>
                             )}
                         </>
                     )
@@ -760,10 +721,10 @@ const Dashboard: React.FC = () => {
             }
 
             {
-                selectedMessage && (
+                modalMessage && (
                     <MessageViewer
-                        message={selectedMessage}
-                        onClose={() => setSelectedMessage(null)}
+                        message={modalMessage}
+                        onClose={() => setModalMessage(null)}
                         onReply={handleReply}
                         onReplyAll={handleReplyAll}
                         onForward={handleForward}

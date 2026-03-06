@@ -1,8 +1,8 @@
 /**
  * MessageList component - displays list of email messages
  */
-import { useState } from 'react'
-import { useClassifyMessage, useToggleStar } from '../hooks/useApi'
+
+import { useToggleStar } from '../hooks/useApi'
 import { useToast } from '../hooks/useToast'
 import type { Message } from '../services/api'
 import './MessageList.css'
@@ -10,13 +10,13 @@ import './MessageList.css'
 interface MessageListProps {
     messages: Message[]
     onMessageClick?: (message: Message) => void
+    onMessageDoubleClick?: (message: Message) => void
+    activeMessageId?: string
 }
 
-export default function MessageList({ messages, onMessageClick }: MessageListProps) {
-    const [classifyingId, setClassifyingId] = useState<string | null>(null)
-    const classifyMessage = useClassifyMessage()
+export default function MessageList({ messages, onMessageClick, onMessageDoubleClick, activeMessageId }: MessageListProps) {
     const toggleStar = useToggleStar()
-    const { showSuccess, showError } = useToast()
+    const { showError } = useToast()
 
     if (messages.length === 0) {
         return (
@@ -64,19 +64,7 @@ export default function MessageList({ messages, onMessageClick }: MessageListPro
         )
     }
 
-    const handleClassify = async (e: React.MouseEvent, messageId: string) => {
-        e.stopPropagation()
-        setClassifyingId(messageId)
 
-        try {
-            const result = await classifyMessage.mutateAsync(messageId)
-            showSuccess(`Classified as: ${result.classification.final_label}`)
-        } catch (error: any) {
-            showError(error?.response?.data?.detail || 'Failed to classify message')
-        } finally {
-            setClassifyingId(null)
-        }
-    }
 
     const handleToggleStar = async (e: React.MouseEvent, messageId: string, currentState: boolean) => {
         e.stopPropagation()
@@ -94,8 +82,9 @@ export default function MessageList({ messages, onMessageClick }: MessageListPro
             {messages.map((message) => (
                 <div
                     key={message.id}
-                    className={`message-item ${message.is_read ? 'read' : 'unread'}`}
+                    className={`message-item ${message.is_read ? 'read' : 'unread'} ${message.id === activeMessageId ? 'active' : ''}`}
                     onClick={() => onMessageClick?.(message)}
+                    onDoubleClick={() => onMessageDoubleClick?.(message)}
                     draggable
                     onDragStart={(e) => {
                         e.dataTransfer.setData('text/plain', message.id)
@@ -122,15 +111,7 @@ export default function MessageList({ messages, onMessageClick }: MessageListPro
                         >
                             {message.is_starred ? '⭐' : '☆'}
                         </button>
-                        {!message.classification_label && (
-                            <button
-                                className="btn-classify"
-                                onClick={(e) => handleClassify(e, message.id)}
-                                disabled={classifyingId === message.id}
-                            >
-                                {classifyingId === message.id ? '⏳' : '🤖 Classify'}
-                            </button>
-                        )}
+
                     </div>
                 </div>
             ))}
