@@ -169,6 +169,13 @@ async def update_account(
     await db.commit()
     await db.refresh(account)
     
+    # Re-schedule background jobs in case auto_sync_interval changed
+    try:
+        from app.services.scheduler import reschedule_account_jobs
+        reschedule_account_jobs()
+    except Exception as e:
+        logger.warning(f"Could not reschedule jobs after account update: {e}")
+    
     return account
 
 

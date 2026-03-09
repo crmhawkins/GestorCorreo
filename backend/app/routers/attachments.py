@@ -8,7 +8,8 @@ from sqlalchemy import select
 from pathlib import Path
 
 from app.database import get_db
-from app.models import Attachment, Message
+from app.models import Attachment, Message, User
+from app.dependencies import get_current_active_user
 
 
 router = APIRouter()
@@ -17,7 +18,8 @@ router = APIRouter()
 @router.get("/{attachment_id}")
 async def download_attachment(
     attachment_id: int,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
 ):
     """Download an attachment file."""
     result = await db.execute(
@@ -57,7 +59,8 @@ async def download_attachment(
 @router.get("/message/{message_id}")
 async def list_message_attachments(
     message_id: str,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
 ):
     """List all attachments for a message."""
     result = await db.execute(

@@ -137,11 +137,20 @@ async def run_classification(db, account, message_ids):
     result = await db.execute(select(Category))
     categories = [{"key": c.key, "ai_instruction": c.ai_instruction} for c in result.scalars().all()]
     
+    if not categories:
+        # Fallback to default categories if none exist in DB
+        categories = [
+            {"key": "Interesantes", "ai_instruction": "Correos de personas directas o importantes."},
+            {"key": "SPAM", "ai_instruction": "Correos no deseados o publicidad genérica."},
+            {"key": "EnCopia", "ai_instruction": "Correos donde solo estamos en CC o informativos."},
+            {"key": "Servicios", "ai_instruction": "Notificaciones de servicios, facturas, alertas."}
+        ]
+        
     result = await db.execute(
         select(Message)
         .outerjoin(Classification, Message.id == Classification.message_id)
         .where(Message.id.in_(message_ids))
-        .where(Classification.id == None)
+        .where(Classification.id.is_(None))  # FIX: must use .is_(None) for proper IS NULL in SQL
     )
     messages_to_classify = result.scalars().all()
     count = 0

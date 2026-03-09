@@ -283,10 +283,10 @@ export interface CategoryUpdate {
 
 // Mock storage for session capabilities
 let MOCK_CATEGORIES: Category[] = [
-  { id: 1, key: 'interesantes', name: 'Interesantes', ai_instruction: 'Budget requests', is_system: true, icon: '⭐' },
-  { id: 2, key: 'spam', name: 'SPAM', ai_instruction: 'Unwanted', is_system: true, icon: '🚫' },
-  { id: 3, key: 'encopia', name: 'EnCopia', ai_instruction: 'CCed emails', is_system: true, icon: '👥' },
-  { id: 4, key: 'servicios', name: 'Servicios', ai_instruction: 'Transactional', is_system: true, icon: '⚙️' }
+  { id: 1, key: 'Interesantes', name: 'Interesantes', ai_instruction: 'Budget requests', is_system: true, icon: '⭐' },
+  { id: 2, key: 'SPAM', name: 'SPAM', ai_instruction: 'Unwanted', is_system: true, icon: '🚫' },
+  { id: 3, key: 'EnCopia', name: 'EnCopia', ai_instruction: 'CCed emails', is_system: true, icon: '👥' },
+  { id: 4, key: 'Servicios', name: 'Servicios', ai_instruction: 'Transactional', is_system: true, icon: '⚙️' }
 ];
 
 export const getCategories = async (): Promise<Category[]> => {

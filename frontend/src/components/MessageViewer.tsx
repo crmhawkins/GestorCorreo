@@ -6,15 +6,10 @@
 import { useState, useEffect } from 'react'
 import DOMPurify from 'dompurify'
 import type { Message, MessageDetail } from '../services/api'
-import { getMessage } from '../services/api'
+import { getMessage, apiClient } from '../services/api'
 import { useMarkAsRead, useDeleteMessage } from '../hooks/useApi'
 import { useToast } from '../hooks/useToast'
 import './MessageViewer.css'
-
-// Build attachment download URL using the same origin (no hardcoded host)
-const getAttachmentDownloadUrl = (attachmentId: number): string => {
-    return `/api/attachments/${attachmentId}`
-}
 
 interface MessageViewerProps {
     message: Message
@@ -104,6 +99,26 @@ export default function MessageViewer({ message, inline, onClose, onReply, onRep
         if (onForward) { onForward(message); onClose() }
     }
 
+    const handleDownloadAttachment = async (e: React.MouseEvent, attachmentId: number, filename: string) => {
+        e.preventDefault();
+        try {
+            const response = await apiClient.get(`/api/attachments/${attachmentId}`, {
+                responseType: 'blob'
+            });
+            const url = window.URL.createObjectURL(new Blob([response.data]));
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+        } catch (error) {
+            console.error('Error downloading attachment:', error);
+            showError('Error al descargar el archivo adjunto');
+        }
+    };
+
     const attachments = messageDetails?.attachments || []
     const bodyHtml = messageDetails?.body_html
     const bodyText = messageDetails?.body_text
@@ -184,8 +199,8 @@ export default function MessageViewer({ message, inline, onClose, onReply, onRep
                                     {attachments.map((attachment) => (
                                         <a
                                             key={attachment.id}
-                                            href={getAttachmentDownloadUrl(attachment.id)}
-                                            download={attachment.filename}
+                                            href="#"
+                                            onClick={(e) => handleDownloadAttachment(e, attachment.id, attachment.filename)}
                                             className="attachment-item"
                                         >
                                             <span className="attachment-icon">📎</span>

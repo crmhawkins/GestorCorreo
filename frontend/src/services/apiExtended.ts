@@ -4,8 +4,7 @@
  */
 import { apiClient } from './api';
 
-// En producción sin VITE_API_URL se usan rutas relativas (mismo origen)
-const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+
 
 // Message Body
 export interface MessageBody {
@@ -31,8 +30,18 @@ export const getMessageAttachments = async (messageId: string): Promise<Attachme
     return response.data;
 };
 
-export const getAttachmentDownloadUrl = (attachmentId: number): string => {
-    return `${API_BASE_URL}/api/attachments/${attachmentId}`;
+export const downloadAttachment = async (attachmentId: number, filename: string): Promise<void> => {
+    const response = await apiClient.get(`/api/attachments/${attachmentId}`, {
+        responseType: 'blob'
+    });
+    const url = window.URL.createObjectURL(new Blob([response.data]));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
 };
 
 // Export all previous interfaces and functions (including getMessage, Message, MessageDetail, etc.)
