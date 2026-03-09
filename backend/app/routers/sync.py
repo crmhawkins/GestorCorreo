@@ -254,6 +254,7 @@ async def resync_message_bodies(
         .where(
             (Message.body_text == None) & (Message.body_html == None)
         )
+        .order_by(Message.folder)  # Order by folder to optimize IMAP selections
         .limit(200)  # Process max 200 at a time
     )
     messages = msg_result.scalars().all()
@@ -267,13 +268,15 @@ async def resync_message_bodies(
         if not connected:
             raise HTTPException(status_code=500, detail="Failed to connect to IMAP server")
 
-        await imap.select_folder("INBOX")
-
-        updated_count = 0
-        failed_count = 0
+        current_folder = None
 
         for message in messages:
             try:
+                target_folder = message.folder or "INBOX"
+                if current_folder != target_folder:
+                    await imap.select_folder(target_folder)
+                    current_folder = target_folder
+                    
                 body_data = await imap.fetch_full_message_body(message.imap_uid)
                 if body_data:
                     body_text = body_data.get('body_text') or ''
@@ -346,6 +349,7 @@ async def resync_message_attachments(
         .where(Message.account_id == account_id)
         .where(Message.has_attachments == True)
         .where(Attachment.id == None)
+        .order_by(Message.folder)  # Optimize IMAP folder switching
         .limit(100)
     )
     messages = msg_result.scalars().all()
@@ -359,13 +363,17 @@ async def resync_message_attachments(
         if not connected:
             raise HTTPException(status_code=500, detail="Failed to connect to IMAP server")
 
-        await imap.select_folder("INBOX")
-
         updated_count = 0
         failed_count = 0
+        current_folder = None
 
         for message in messages:
             try:
+                target_folder = message.folder or "INBOX"
+                if current_folder != target_folder:
+                    await imap.select_folder(target_folder)
+                    current_folder = target_folder
+                    
                 body_data = await imap.fetch_full_message_body(message.imap_uid)
                 if body_data and body_data.get('attachments'):
                     for att_data in body_data['attachments']:
