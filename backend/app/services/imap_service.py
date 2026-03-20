@@ -522,6 +522,17 @@ async def sync_account_messages(
             total_new = len(new_msg_nums)
             logger.info(f"Identified {total_new} truly new messages")
 
+            # Cold start detection: if no messages in DB, this is the first sync.
+            # Old emails (before today) will be marked as read without classifying.
+            first_sync_check = await db.execute(
+                select(Message).where(Message.account_id == account.id).limit(1)
+            )
+            is_first_sync = first_sync_check.scalar_one_or_none() is None and total_new > 0
+            today_date = datetime.now().date()
+
+            if is_first_sync:
+                logger.info(f"Cold start detected for {account.email_address}: emails before today will be marked as read without classifying")
+
             yield {
                 'status': 'found_messages',
                 'total': total_new,
@@ -600,6 +611,14 @@ async def sync_account_messages(
                     # FIX 4: has_attachments based on real attachment count
                     has_attachments = len(att_list) > 0
 
+                    # Cold start: mark emails before today as read (no classification)
+                    email_date = headers.get('date')
+                    is_old_email = (
+                        is_first_sync
+                        and email_date is not None
+                        and email_date.date() < today_date
+                    )
+
                     message = Message(
                         id=str(uuid.uuid4()),
                         account_id=account.id,
@@ -615,7 +634,7 @@ async def sync_account_messages(
                         snippet=real_snippet,
                         body_text=body_text,
                         body_html=body_html,
-                        is_read=False,
+                        is_read=is_old_email,
                         is_starred=False,
                         has_attachments=has_attachments
                     )
@@ -665,7 +684,8 @@ async def sync_account_messages(
                             logger.error(f"Failed to save UID cache: {e}")
 
                     # FIX 7: Classify message immediately (1-to-1 processing)
-                    if account.auto_classify:
+                    # On cold start, skip classification for emails before today
+                    if account.auto_classify and not is_old_email:
                         yield {
                             'status': 'classifying_progress',
                             'current': index + 1,
