@@ -31,9 +31,9 @@ const Dashboard: React.FC = () => {
     const [showComposer, setShowComposer] = useState(false)
 
     const [showSettings, setShowSettings] = useState(false)
-    const [isResyncingBodies, setIsResyncingBodies] = useState(false)
-    const [isResyncingAttachments, setIsResyncingAttachments] = useState(false)
-    const [isClassifyingPending, setIsClassifyingPending] = useState(false)
+    const [_isResyncingBodies, setIsResyncingBodies] = useState(false)
+    const [_isResyncingAttachments, setIsResyncingAttachments] = useState(false)
+    const [_isClassifyingPending, setIsClassifyingPending] = useState(false)
     const [composerMode, setComposerMode] = useState<'new' | 'reply' | 'reply_all' | 'forward'>('new')
     const [composerOriginalMessage, setComposerOriginalMessage] = useState<Message | MessageDetail | null>(null)
     const [searchFilters, setSearchFilters] = useState<any>({})
@@ -280,7 +280,7 @@ const Dashboard: React.FC = () => {
         )
     }
 
-    const handleResyncAttachments = async () => {
+    const _handleResyncAttachments = async () => {
         if (!selectedAccount) return
         if (!confirm('Esto re-descargará los adjuntos de correos que los indican pero no los tienen guardados. ¿Continuar?')) return
 
@@ -302,7 +302,7 @@ const Dashboard: React.FC = () => {
         }
     }
 
-    const handleResyncBodies = async () => {
+    const _handleResyncBodies = async () => {
         if (!selectedAccount) return
         if (!confirm('Esto re-descargará el cuerpo de todos los correos sin contenido. ¿Continuar?')) return
 
@@ -324,7 +324,7 @@ const Dashboard: React.FC = () => {
         }
     }
 
-    const handleClassifyPending = async () => {
+    const _handleClassifyPending = async () => {
         if (!selectedAccount) return
         if (!confirm('Esto forzará a la IA a clasificar TODOS los correos descargados que aún no tengan categoría asignada. Puede tardar un rato. ¿Continuar?')) return
 

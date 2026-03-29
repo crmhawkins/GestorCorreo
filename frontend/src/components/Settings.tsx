@@ -180,7 +180,7 @@ export default function Settings({ onClose }: SettingsProps) {
         showInfo('Testing connection...')
 
         try {
-            await apiClient.post(`/api/accounts/${accountId}/test`)
+            await apiClient.post(`/api/accounts/${accountId}/test-connection`)
             showSuccess('Connection successful!')
         } catch (error: any) {
             showError(error?.response?.data?.detail || 'Connection failed')
@@ -466,7 +466,7 @@ function CategoryManager() {
 function BulkClassifyButton() {
     const { data: accounts } = useAccounts()
     const classifyPending = useClassifyPendingMessages()
-    const { showSuccess, showError, showInfo } = useToast()
+    const { showSuccess, showInfo } = useToast()
     const [running, setRunning] = useState(false)
 
     const handleClassify = async () => {
