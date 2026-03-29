@@ -1,4 +1,4 @@
-FROM php:8.2-fpm-alpine
+FROM php:8.4-fpm-alpine
 
 # Instalar dependencias del sistema
 RUN apk add --no-cache \
@@ -10,17 +10,19 @@ RUN apk add --no-cache \
     unzip \
     c-client \
     imap-dev \
+    krb5-dev \
     openssl-dev \
     oniguruma-dev \
     libzip-dev \
-    && docker-php-ext-configure imap --with-kerberos --with-imap-ssl \
+    ca-certificates \
     && docker-php-ext-install \
-        imap \
         pdo \
         pdo_mysql \
         mbstring \
         zip \
-        opcache
+        opcache \
+    && pecl install imap \
+    && docker-php-ext-enable imap
 
 # Instalar Composer
 COPY --from=composer:2.7 /usr/bin/composer /usr/bin/composer
