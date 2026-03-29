@@ -45,6 +45,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // Accounts
     Route::apiResource('accounts', App\Http\Controllers\AccountController::class);
     Route::post('/accounts/{id}/test-connection', [App\Http\Controllers\AccountController::class, 'testConnection']);
+    Route::post('/accounts/{id}/test',            [App\Http\Controllers\AccountController::class, 'testConnection']); // alias frontend legacy
     Route::post('/accounts/{id}/restore',         [App\Http\Controllers\AccountController::class, 'restore']);
 
     // Messages
