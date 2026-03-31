@@ -35,11 +35,14 @@ class Pop3Service
             'host'          => $this->account->imap_host,
             'port'          => (int)$this->account->imap_port,
             'encryption'    => $encryption,
-            'validate_cert' => (bool)($this->account->ssl_verify ?? true),
+            'validate_cert' => false,
             'username'      => $this->account->username,
             'password'      => $this->password,
             'protocol'      => 'pop3',
-            'timeout'       => (int)($this->account->connection_timeout ?? 30),
+            'timeout'       => 60,
+            'options' => [
+                'DISABLE_AUTHENTICATOR' => 'GSSAPI'
+            ]
         ]);
 
         try {

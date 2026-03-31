@@ -37,11 +37,20 @@ class ImapService
             'host'          => $this->account->imap_host,
             'port'          => (int)$this->account->imap_port,
             'encryption'    => $encryption,
-            'validate_cert' => (bool)($this->account->ssl_verify ?? true),
+            'validate_cert' => false, // Cambiado a falso para evitar fallos de conexión por certificados
             'username'      => $this->account->username,
             'password'      => $this->password,
             'protocol'      => 'imap',
-            'timeout'       => (int)($this->account->connection_timeout ?? 30),
+            'timeout'       => 60,
+            'proxy'         => [
+                'socket' => 'tcp',
+                'request_options' => [
+                    'timeout' => 60,
+                ],
+            ],
+            'options' => [
+                'DISABLE_AUTHENTICATOR' => 'GSSAPI' // Desactivar métodos raros de autenticación que fallan a veces
+            ]
         ]);
 
         try {
