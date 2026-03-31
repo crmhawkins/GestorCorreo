@@ -20,16 +20,20 @@ class SyncService
 
     private function resolveProtocol(Account $account): string
     {
-        $protocol = strtolower((string)($account->protocol ?? ''));
-        if (in_array($protocol, ['imap', 'pop3'], true)) {
-            return $protocol;
-        }
-
         $host = strtolower((string)($account->imap_host ?? ''));
         $port = (int)($account->imap_port ?? 0);
 
         if (str_starts_with($host, 'pop.') || str_contains($host, 'pop3') || in_array($port, [110, 995], true)) {
             return 'pop3';
+        }
+
+        if (str_starts_with($host, 'imap.') || str_contains($host, 'imap') || in_array($port, [143, 993], true)) {
+            return 'imap';
+        }
+
+        $protocol = strtolower((string)($account->protocol ?? ''));
+        if (in_array($protocol, ['imap', 'pop3'], true)) {
+            return $protocol;
         }
 
         return 'imap';
