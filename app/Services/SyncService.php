@@ -548,19 +548,6 @@ class SyncService
 
             yield ['status' => 'downloading', 'current' => 0, 'total' => count($pending), 'message' => 'Lista de mensajes obtenida.'];
 
-            // Filtrar los que no están en caché
-            $pending = [];
-            foreach ($allOverviews as $msgNum => $ov) {
-                $messageId = trim($ov->message_id ?? '');
-                $uid = $messageId !== ''
-                    ? $messageId
-                    : $account->imap_host . '_' . $msgNum . '_' . ($ov->size ?? 0);
-
-                if (!isset($cachedUidsMap[$uid])) {
-                    $pending[$msgNum] = ['uid' => $uid, 'overview' => $ov];
-                }
-            }
-
             $total   = count($pending);
             $current = 0;
 
