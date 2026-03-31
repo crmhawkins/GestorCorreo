@@ -111,27 +111,21 @@ class SyncService
 
             $startFrom = $lastMsgCount > 0 ? $lastMsgCount + 1 : 1;
 
-            // Obtener overviews solo de los mensajes nuevos
+            // Obtener todos los mensajes nuevos
+            $allUidls = $pop3->getAllUidls();
+            
+            // Filtrar solo los que están en el rango que no conocemos (mensajes nuevos tras lastMsgCount)
             $allOverviews = [];
-            if ($startFrom <= $currentCount) {
-                for ($end = $currentCount; $end >= $startFrom; $end -= 100) {
-                    $start     = max($startFrom, $end - 99);
-                    $overviews = @imap_fetch_overview($pop3->getConnection(), "{$start}:{$end}");
-                    if ($overviews) {
-                        foreach ($overviews as $ov) {
-                            $allOverviews[(int)$ov->msgno] = $ov;
-                        }
-                    }
+            foreach ($allUidls as $msgNum => $uid) {
+                if ($msgNum >= $startFrom) {
+                    $allOverviews[$msgNum] = (object)['uid' => $uid];
                 }
             }
 
             $today = Carbon::today();
 
             foreach ($allOverviews as $msgNum => $ov) {
-                $ovMessageId = trim($ov->message_id ?? '');
-                $uid = $ovMessageId !== ''
-                    ? $ovMessageId
-                    : $account->imap_host . '_' . $msgNum . '_' . ($ov->size ?? 0);
+                $uid = $ov->uid;
 
                 if (isset($cachedUidsMap[$uid])) {
                     continue;
@@ -520,24 +514,18 @@ class SyncService
             }
 
             $startFrom    = $lastMsgCount > 0 ? $lastMsgCount + 1 : 1;
-            $allOverviews = [];
+            $allUidls     = $pop3->getAllUidls();
 
-            if ($startFrom <= $currentCount) {
-                for ($end = $currentCount; $end >= $startFrom; $end -= 100) {
-                    $start     = max($startFrom, $end - 99);
-                    $overviews = @imap_fetch_overview($pop3->getConnection(), "{$start}:{$end}");
-                    if ($overviews) {
-                        foreach ($overviews as $ov) {
-                            $allOverviews[(int)$ov->msgno] = $ov;
-                        }
-                    }
-                    yield ['status' => 'downloading', 'current' => $currentCount - $end, 'total' => $currentCount - $startFrom + 1, 'message' => 'Escaneando mensajes...'];
+            $pending = [];
+            foreach ($allUidls as $msgNum => $uid) {
+                if ($msgNum >= $startFrom && !isset($cachedUidsMap[$uid])) {
+                    $pending[$msgNum] = ['uid' => $uid];
                 }
             }
 
             $today = Carbon::today();
 
-            yield ['status' => 'downloading', 'current' => 0, 'total' => count($allOverviews), 'message' => 'Lista obtenida. Procesando...'];
+            yield ['status' => 'downloading', 'current' => 0, 'total' => count($pending), 'message' => 'Lista de mensajes obtenida.'];
 
             // Filtrar los que no están en caché
             $pending = [];
@@ -563,12 +551,15 @@ class SyncService
 
             foreach ($pending as $msgNum => $item) {
                 $uid = $item['uid'];
-                $ov  = $item['overview'];
                 $current++;
                 yield ['status' => 'downloading', 'current' => $current, 'total' => $total];
 
                 try {
-                    $ovMessageId = trim($ov->message_id ?? '');
+                    // Descargar mensaje completo directamente
+                    $msgData = $pop3->fetchMessage($msgNum);
+                    if (!$msgData) continue;
+
+                    $ovMessageId = $msgData['message_id'] ?? '';
 
                     // Evitar duplicados por message_id
                     if ($ovMessageId) {
@@ -581,66 +572,12 @@ class SyncService
                         }
                     }
 
-                    // Detectar si es email antiguo usando udate (Unix timestamp) del overview
-                    $isOldEmail = false;
-                    if ($isFirstSync) {
-                        try {
-                            $emailDate = isset($ov->udate) && $ov->udate > 0
-                                ? Carbon::createFromTimestamp($ov->udate)
-                                : ($ov->date ? Carbon::parse($ov->date) : null);
-                            if ($emailDate && $emailDate->lt($today)) {
-                                $isOldEmail = true;
-                            }
-                        } catch (\Throwable) {}
-                    }
-
-                    if ($isOldEmail) {
-                        // Email antiguo: guardar solo overview, marcar leído, no descargar cuerpo
-                        $fromRaw   = $ov->from ?? '';
-                        $fromParts = explode('<', $fromRaw);
-                        $fromName  = trim($fromParts[0] ?? '');
-                        $fromEmail = trim(str_replace('>', '', $fromParts[1] ?? $fromRaw));
-
-                        $emailDate = isset($ov->udate) && $ov->udate > 0
-                            ? Carbon::createFromTimestamp($ov->udate)
-                            : (isset($ov->date) ? Carbon::parse($ov->date) : now());
-
-                        $messageId = (string) Str::uuid();
-                        Message::create([
-                            'id'             => $messageId,
-                            'account_id'     => $account->id,
-                            'imap_uid'       => null,
-                            'message_id'     => $ovMessageId,
-                            'subject'        => $this->decodeOverviewSubject($ov->subject ?? ''),
-                            'from_name'      => $fromName,
-                            'from_email'     => $fromEmail,
-                            'to_addresses'   => '[]',
-                            'cc_addresses'   => '[]',
-                            'date'           => $emailDate,
-                            'snippet'        => '',
-                            'folder'         => 'INBOX',
-                            'body_text'      => '',
-                            'body_html'      => '',
-                            'has_attachments' => false,
-                            'is_read'        => true,
-                            'is_starred'     => false,
-                            'created_at'     => now(),
-                        ]);
-                        $cachedUidsMap[$uid] = 1;
-                        $newMessages++;
-                        continue;
-                    }
-
-                    // Email nuevo o no es primera sync: descargar cuerpo completo
-                    $msgData = $pop3->fetchMessage($msgNum);
-                    if (!$msgData) continue;
-
                     $messageId = (string) Str::uuid();
                     $message   = Message::create([
                         'id'             => $messageId,
                         'account_id'     => $account->id,
                         'imap_uid'       => null,
-                        'message_id'     => $msgData['message_id'] ?? '',
+                        'message_id'     => $ovMessageId,
                         'subject'        => $msgData['subject']    ?? '',
                         'from_name'      => $msgData['from_name']  ?? '',
                         'from_email'     => $msgData['from_email'] ?? '',
