@@ -97,8 +97,8 @@ function renderAccounts() {
     list.innerHTML = S.accounts.map(a => `
         <div class="account-item ${S.selectedAccount === a.id ? 'active' : ''}"
              data-id="${a.id}" onclick="selectAccount(${a.id})">
-            <span class="account-name">${a.name || ''}</span>
-            <span class="account-email">${a.email}</span>
+            <span class="account-name">${a.username || a.email_address}</span>
+            <span class="account-email">${a.email_address}</span>
         </div>
     `).join('');
 }
@@ -428,8 +428,8 @@ async function sendEmail() {
 function openAccountModal(acc = null) {
     S.editingAccountId = acc?.id || null;
     document.getElementById('account-modal-title').textContent = acc ? 'Editar cuenta' : 'Añadir cuenta';
-    document.getElementById('acc-name').value = acc?.name || '';
-    document.getElementById('acc-email').value = acc?.email || '';
+    document.getElementById('acc-name').value = acc?.username || '';
+    document.getElementById('acc-email').value = acc?.email_address || '';
     document.getElementById('acc-password').value = '';
     document.getElementById('acc-imap-host').value = acc?.imap_host || '';
     document.getElementById('acc-imap-port').value = acc?.imap_port || 993;
@@ -441,18 +441,19 @@ function openAccountModal(acc = null) {
 }
 
 async function saveAccount() {
+    const emailStr = document.getElementById('acc-email').value.trim();
     const body = {
         name: document.getElementById('acc-name').value.trim(),
-        email: document.getElementById('acc-email').value.trim(),
+        email_address: emailStr,
+        username: emailStr, // Generalmente se usa el email como usuario en IMAP
         password: document.getElementById('acc-password').value,
         imap_host: document.getElementById('acc-imap-host').value.trim(),
         imap_port: parseInt(document.getElementById('acc-imap-port').value),
-        imap_ssl: document.getElementById('acc-imap-ssl').value === '1',
         smtp_host: document.getElementById('acc-smtp-host').value.trim(),
         smtp_port: parseInt(document.getElementById('acc-smtp-port').value),
-        smtp_ssl: document.getElementById('acc-smtp-ssl').value === '1',
+        ssl_verify: document.getElementById('acc-imap-ssl').value === '1',
     };
-    if (!body.email) { toast('El email es obligatorio', 'error'); return; }
+    if (!body.email_address) { toast('El email es obligatorio', 'error'); return; }
 
     const btn = document.getElementById('btn-save-account');
     btn.disabled = true; btn.textContent = 'Guardando…';
