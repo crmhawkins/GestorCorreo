@@ -161,6 +161,43 @@ function escHtml(s) {
     return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+function decodeQuotedPrintableText(input) {
+    if (!input) return '';
+    let s = String(input);
+    s = s.replace(/=\r?\n/g, '');
+    s = s.replace(/=([A-Fa-f0-9]{2})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
+    return s;
+}
+
+function stripHtmlToText(html) {
+    const el = document.createElement('div');
+    el.innerHTML = String(html || '');
+    return (el.textContent || el.innerText || '').trim();
+}
+
+function normalizeBodyTextForReply(rawText, rawHtml) {
+    let text = String(rawText || '');
+    if (/=[A-Fa-f0-9]{2}/.test(text) || text.includes('=0D=0A')) {
+        text = decodeQuotedPrintableText(text);
+    }
+    if (/<html|<body|<table|<style/i.test(text)) {
+        text = stripHtmlToText(text);
+    }
+    if (!text && rawHtml) {
+        text = stripHtmlToText(decodeQuotedPrintableText(String(rawHtml)));
+    }
+    return text.trim();
+}
+
+function getPrimaryTo(message) {
+    const to = message?.to_addresses;
+    if (Array.isArray(to) && to.length) {
+        if (typeof to[0] === 'string') return to[0];
+        if (to[0] && typeof to[0] === 'object') return to[0].email || '';
+    }
+    return message?.to_email || '';
+}
+
 function buildPreviewHtml(message) {
     let html = String(message?.body_html || '');
     if (!html) return '';
@@ -212,7 +249,7 @@ async function renderViewer(msg) {
                 <div class="viewer-subject">${escHtml(m.subject || '(Sin asunto)')}</div>
                 <div class="viewer-meta">
                     <div><strong>De:</strong> ${escHtml(m.from_name ? `${m.from_name} <${m.from_email}>` : m.from_email)}</div>
-                    <div><strong>Para:</strong> ${escHtml(m.to_email || '')}</div>
+                    <div><strong>Para:</strong> ${escHtml(getPrimaryTo(m) || '')}</div>
                     <div><strong>Fecha:</strong> ${new Date(m.date).toLocaleString('es-ES')}</div>
                 </div>
                 <div class="viewer-actions">
@@ -492,10 +529,11 @@ function openCompose(mode = 'new', originalMsg = null) {
         if (mode === 'reply') to.value = originalMsg.from_email || '';
         if (mode === 'reply_all') to.value = [originalMsg.from_email, originalMsg.to_email].filter(Boolean).join(', ');
         if (mode === 'forward') to.value = '';
+        const cleanOriginal = normalizeBodyTextForReply(originalMsg.body_text, originalMsg.body_html);
         subject.value = (mode === 'forward' ? 'Fwd: ' : 'Re: ') + (originalMsg.subject || '');
         body.value = mode === 'forward'
-            ? `\n\n-------- Mensaje reenviado --------\nDe: ${originalMsg.from_email}\nFecha: ${new Date(originalMsg.date).toLocaleString('es-ES')}\nAsunto: ${originalMsg.subject}\n\n${originalMsg.body_text || ''}`
-            : `\n\n> ${(originalMsg.body_text || '').split('\n').join('\n> ')}`;
+            ? `\n\n-------- Mensaje reenviado --------\nDe: ${originalMsg.from_email}\nFecha: ${new Date(originalMsg.date).toLocaleString('es-ES')}\nAsunto: ${originalMsg.subject}\n\n${cleanOriginal}`
+            : `\n\n> ${cleanOriginal.split('\n').join('\n> ')}`;
     }
 
     document.getElementById('modal-compose').style.display = 'flex';
@@ -561,7 +599,7 @@ window.openMessageLarge = async function (id) {
             <div class="viewer-subject">${escHtml(m.subject || '(Sin asunto)')}</div>
             <div class="viewer-meta">
                 <div><strong>De:</strong> ${escHtml(m.from_name ? `${m.from_name} <${m.from_email}>` : (m.from_email || ''))}</div>
-                <div><strong>Para:</strong> ${escHtml(m.to_email || '')}</div>
+            <div><strong>Para:</strong> ${escHtml(getPrimaryTo(m) || '')}</div>
                 <div><strong>Fecha:</strong> ${m.date ? new Date(m.date).toLocaleString('es-ES') : ''}</div>
             </div>
             <div class="viewer-actions">

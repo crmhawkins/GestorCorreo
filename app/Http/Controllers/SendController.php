@@ -36,6 +36,7 @@ class SendController extends Controller
             'body_text'  => 'sometimes|nullable|string',
             'body_html'  => 'sometimes|nullable|string',
             'reply_to'   => 'sometimes|nullable|string|email',
+            'reply_to_message_id' => 'sometimes|nullable|string|exists:messages,id',
             'attachments' => 'sometimes|array',
             'attachments.*.name' => 'required_with:attachments|string|max:255',
             'attachments.*.mime_type' => 'sometimes|nullable|string|max:120',
@@ -78,6 +79,22 @@ class SendController extends Controller
 
         if (!empty($validated['reply_to'])) {
             $emailData['reply_to'] = $validated['reply_to'];
+        }
+
+        if (!empty($validated['reply_to_message_id'])) {
+            $original = Message::where('id', $validated['reply_to_message_id'])
+                ->where('account_id', $account->id)
+                ->first();
+            if ($original) {
+                $quoted = "\n\n-------- Mensaje original --------\n"
+                    . "De: " . ($original->from_email ?? '') . "\n"
+                    . "Fecha: " . ($original->date ? $original->date->toDateTimeString() : '') . "\n"
+                    . "Asunto: " . ($original->subject ?? '') . "\n\n"
+                    . ($original->body_text ?? '');
+                if (!str_contains((string)$emailData['body_text'], '-------- Mensaje original --------')) {
+                    $emailData['body_text'] = ($emailData['body_text'] ?? '') . $quoted;
+                }
+            }
         }
 
         if (!empty($validated['attachments']) && is_array($validated['attachments'])) {
@@ -133,8 +150,8 @@ class SendController extends Controller
                 'subject'         => $validated['subject'],
                 'from_name'       => '',
                 'from_email'      => $account->email_address,
-                'to_addresses'    => is_string($validated['to']) ? json_encode([['name' => '', 'email' => $validated['to']]]) : json_encode($validated['to']),
-                'cc_addresses'    => !empty($validated['cc']) ? (is_string($validated['cc']) ? json_encode([['name' => '', 'email' => $validated['cc']]]) : json_encode($validated['cc'])) : '[]',
+                'to_addresses'    => json_encode($this->normalizeAddressList($validated['to'])),
+                'cc_addresses'    => !empty($validated['cc']) ? json_encode($this->normalizeAddressList($validated['cc'])) : '[]',
                 'date'            => now(),
                 'snippet'         => mb_substr(strip_tags((string)($validated['body_text'] ?? '')), 0, 200),
                 'folder'          => 'Sent',
@@ -175,6 +192,31 @@ class SendController extends Controller
             'message' => $result['message'],
             'status'  => 'success',
         ]);
+    }
+
+    private function normalizeAddressList(mixed $raw): array
+    {
+        if (is_array($raw)) {
+            return array_values(array_filter(array_map(function ($item) {
+                if (is_string($item)) return ['name' => '', 'email' => trim($item)];
+                if (is_array($item)) return ['name' => (string)($item['name'] ?? ''), 'email' => (string)($item['email'] ?? '')];
+                return null;
+            }, $raw)));
+        }
+
+        $str = trim((string)$raw);
+        if ($str === '') return [];
+
+        $parts = array_filter(array_map('trim', explode(',', $str)));
+        $res = [];
+        foreach ($parts as $p) {
+            if (preg_match('/^(.*?)\s*<\s*([^>]+)\s*>$/', $p, $m)) {
+                $res[] = ['name' => trim($m[1], "\"' "), 'email' => trim($m[2])];
+            } else {
+                $res[] = ['name' => '', 'email' => $p];
+            }
+        }
+        return $res;
     }
 
     private function decodeAttachmentPayload(string $payload): ?string
