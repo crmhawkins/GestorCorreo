@@ -304,6 +304,7 @@ document.getElementById('login-form').addEventListener('submit', async function(
         token = data.access_token || data.token;
         localStorage.setItem('token', token);
         localStorage.setItem('user', JSON.stringify(data.user));
+        sessionStorage.setItem('platform_password_temp', document.getElementById('login-password').value);
 
         if (!data.user?.is_admin) {
             window.location.href = '/';
@@ -341,6 +342,7 @@ document.getElementById('register-form').addEventListener('submit', async functi
         token = data.token;
         localStorage.setItem('token', token);
         localStorage.setItem('user', JSON.stringify(data.user));
+        sessionStorage.setItem('platform_password_temp', document.getElementById('reg-password').value);
 
         toast('Cuenta creada correctamente', 'success');
         showAdminPanel(data.user);

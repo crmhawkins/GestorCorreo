@@ -683,6 +683,9 @@ async function saveAccount() {
     } else if (!S.editingAccountId && tempPlatformPassword) {
         // Primera configuración: usar automáticamente la misma contraseña del registro/login.
         body.password = tempPlatformPassword;
+    } else if (!S.editingAccountId) {
+        toast('Para la primera configuración debes iniciar sesión de nuevo o escribir la contraseña manualmente.', 'error');
+        return;
     }
     if (!body.email_address) { toast('El email es obligatorio', 'error'); return; }
 
