@@ -47,10 +47,12 @@ class ImapService
                 $flags = $this->buildImapFlags($port, $verify);
                 $mailbox = '{' . $host . ':' . $port . $flags . '}INBOX';
 
-                imap_timeout(IMAP_OPENTIMEOUT, $timeout);
-                imap_timeout(IMAP_READTIMEOUT, $timeout);
-                imap_timeout(IMAP_WRITETIMEOUT, $timeout);
-                imap_timeout(IMAP_CLOSETIMEOUT, $timeout);
+                if (function_exists('imap_timeout')) {
+                    imap_timeout(IMAP_OPENTIMEOUT, $timeout);
+                    imap_timeout(IMAP_READTIMEOUT, $timeout);
+                    imap_timeout(IMAP_WRITETIMEOUT, $timeout);
+                    imap_timeout(IMAP_CLOSETIMEOUT, $timeout);
+                }
 
                 $this->connection = @imap_open(
                     $mailbox,
