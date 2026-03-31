@@ -142,6 +142,18 @@ class SyncService
             // Obtener total actual del servidor
             $currentCount = $pop3->getMessageCount();
 
+            // Bootstrap POP3: si no hay cache previa, tomamos el estado actual como base
+            // para evitar procesar todo el histórico la primera vez.
+            if ($lastMsgCount === 0 && empty($cachedUids) && $currentCount > 0) {
+                $allUidls = $pop3->getAllUidls();
+                Storage::put($cacheFile, json_encode([
+                    'uids'       => array_values(array_map('strval', array_values($allUidls))),
+                    'last_count' => $currentCount,
+                ]));
+
+                return ['status' => 'success', 'new_messages' => 0, 'new_message_ids' => [], 'error' => null];
+            }
+
             // Optimización: solo descargar overviews de mensajes NUEVOS (msgNum > lastMsgCount)
             // Los mensajes anteriores ya están en caché.
             if ($lastMsgCount > 0 && $currentCount <= $lastMsgCount) {
@@ -462,6 +474,17 @@ class SyncService
 
             // Obtener total actual del servidor
             $currentCount = $pop3->getMessageCount();
+
+            // Bootstrap POP3 en streaming: no procesar histórico inicial.
+            if ($lastMsgCount === 0 && empty($cachedUids) && $currentCount > 0) {
+                $allUidls = $pop3->getAllUidls();
+                Storage::put($cacheFile, json_encode([
+                    'uids'       => array_values(array_map('strval', array_values($allUidls))),
+                    'last_count' => $currentCount,
+                ]));
+                yield ['status' => 'success', 'new_messages' => 0, 'new_message_ids' => [], 'message' => 'Estado inicial de POP3 guardado. Se sincronizarán solo correos nuevos.'];
+                return;
+            }
 
             // Optimización: solo descargar overviews de mensajes NUEVOS
             if ($lastMsgCount > 0 && $currentCount <= $lastMsgCount) {
