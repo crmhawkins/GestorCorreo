@@ -57,7 +57,9 @@ document.getElementById('login-form').addEventListener('submit', async function(
         if (!res.ok) throw new Error(data.message || 'Credenciales incorrectas');
         localStorage.setItem('token', data.access_token || data.token);
         localStorage.setItem('user', JSON.stringify(data.user));
-        window.location.href = '/';
+        const redirect = sessionStorage.getItem('redirect_after_login') || '/';
+        sessionStorage.removeItem('redirect_after_login');
+        window.location.href = redirect;
     } catch (ex) {
         err.textContent = ex.message;
         err.style.display = 'block';

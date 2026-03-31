@@ -171,7 +171,10 @@
 @push('scripts')
 <script>
 const token = localStorage.getItem('token');
-if (!token) window.location.href = '/login';
+if (!token) {
+    sessionStorage.setItem('redirect_after_login', '/admin');
+    window.location.href = '/login';
+}
 
 // ── Toast ──────────────────────────────────────────────────────
 function toast(msg, type = 'info') {
