@@ -116,8 +116,7 @@ function renderFolders() {
 }
 
 async function loadUnreadCounts() {
-    const qs = S.selectedAccount ? `?account_id=${S.selectedAccount}` : '';
-    const r = await api('GET', `/messages/unread-counts${qs}`);
+    const r = await api('GET', '/messages/unread-counts');
     if (!r?.ok) return;
     const c = r.data || {};
     const ids = ['all', 'starred', 'Interesantes', 'Servicios', 'EnCopia', 'SPAM', 'deleted'];
@@ -318,9 +317,8 @@ async function setMessageFolderByDrop(messageId, targetFilter) {
         return;
     }
 
-    S.messages = S.messages.filter(m => m.id !== messageId);
-    renderMessages();
-    loadUnreadCounts();
+    await loadMessages(true);
+    await loadUnreadCounts();
     toast(`Mensaje movido a ${targetFilter}`, 'success');
 }
 
