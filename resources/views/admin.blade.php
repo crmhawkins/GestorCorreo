@@ -2,7 +2,57 @@
 @section('title', 'Administración — Hawkins Mail')
 
 @section('content')
-<div class="admin-layout">
+
+<!-- AUTH SCREEN (login + register) — visible when not authenticated -->
+<div class="login-page" id="auth-screen" style="display:none">
+    <div class="login-card" style="max-width:420px">
+        <div class="login-logo">
+            <div class="login-logo-mark">H</div>
+            <div class="login-logo-text">
+                Hawkins Mail
+                <span>Panel de administración</span>
+            </div>
+        </div>
+
+        <!-- Tabs login / register -->
+        <div class="auth-tabs" id="auth-tabs">
+            <button class="auth-tab active" data-tab="login">Iniciar sesión</button>
+            <button class="auth-tab" data-tab="register">Registrarse</button>
+        </div>
+
+        <!-- LOGIN FORM -->
+        <form id="login-form" class="auth-form">
+            <div id="login-error" class="login-error" style="display:none"></div>
+            <div class="form-group">
+                <label for="login-username">Usuario</label>
+                <input type="text" id="login-username" autocomplete="username" required placeholder="nombre de usuario">
+            </div>
+            <div class="form-group">
+                <label for="login-password">Contraseña</label>
+                <input type="password" id="login-password" autocomplete="current-password" required placeholder="••••••••">
+            </div>
+            <button type="submit" class="btn-login">Entrar</button>
+        </form>
+
+        <!-- REGISTER FORM -->
+        <form id="register-form" class="auth-form" style="display:none">
+            <div id="register-info" class="admin-info" style="display:none"></div>
+            <div id="register-error" class="login-error" style="display:none"></div>
+            <div class="form-group">
+                <label for="reg-username">Usuario</label>
+                <input type="text" id="reg-username" autocomplete="username" required placeholder="nombre de usuario">
+            </div>
+            <div class="form-group">
+                <label for="reg-password">Contraseña</label>
+                <input type="password" id="reg-password" autocomplete="new-password" required placeholder="mínimo 6 caracteres">
+            </div>
+            <button type="submit" class="btn-login">Crear cuenta</button>
+        </form>
+    </div>
+</div>
+
+<!-- ADMIN PANEL — visible when authenticated as admin -->
+<div class="admin-layout" id="admin-panel" style="display:none">
 
     <!-- SIDEBAR -->
     <aside class="sidebar">
@@ -126,6 +176,21 @@
 
 @push('styles')
 <style>
+/* Auth tabs */
+.auth-tabs { display:flex; gap:0; margin-bottom:1.25rem; border-radius:var(--radius); overflow:hidden; border:1px solid var(--border); }
+.auth-tab {
+    flex:1; padding:.55rem; text-align:center; font-size:.82rem; font-weight:500;
+    background:var(--surface); color:var(--text-dim); border:none; cursor:pointer;
+    font-family:inherit; transition:all .15s;
+}
+.auth-tab:hover { background:var(--surface-hover); }
+.auth-tab.active { background:var(--accent-muted); color:#93b4fd; }
+.admin-info {
+    background:rgba(59,130,246,.12); border:1px solid rgba(59,130,246,.25);
+    color:#93b4fd; border-radius:var(--radius); padding:.5rem .75rem; font-size:.82rem; margin-bottom:.75rem;
+}
+
+/* Admin layout */
 .admin-layout { display:flex; height:100vh; overflow:hidden; }
 .admin-main { flex:1; overflow-y:auto; padding:2rem; background:var(--bg); }
 .admin-nav { padding:.75rem; display:flex; flex-direction:column; gap:.15rem; margin-top:.5rem; }
@@ -170,11 +235,7 @@
 
 @push('scripts')
 <script>
-const token = localStorage.getItem('token');
-if (!token) {
-    sessionStorage.setItem('redirect_after_login', '/admin');
-    window.location.href = '/login';
-}
+let token = localStorage.getItem('token');
 
 // ── Toast ──────────────────────────────────────────────────────
 function toast(msg, type = 'info') {
@@ -188,14 +249,110 @@ function toast(msg, type = 'info') {
 
 // ── API ────────────────────────────────────────────────────────
 async function api(method, path, body = null) {
-    const opts = { method, headers: { 'Content-Type':'application/json', 'Authorization':`Bearer ${token}` } };
+    const headers = { 'Content-Type':'application/json' };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const opts = { method, headers };
     if (body) opts.body = JSON.stringify(body);
     const res = await fetch(`/api${path}`, opts);
-    if (res.status === 401) { localStorage.clear(); window.location.href = '/login'; }
+    if (res.status === 401 && token) { localStorage.clear(); token = null; showAuthScreen(); }
     return { ok: res.ok, data: await res.json().catch(() => ({})) };
 }
 
-// ── Tabs ───────────────────────────────────────────────────────
+// ── Screen switching ───────────────────────────────────────────
+function showAuthScreen() {
+    document.getElementById('auth-screen').style.display = '';
+    document.getElementById('admin-panel').style.display = 'none';
+}
+
+function showAdminPanel(user) {
+    document.getElementById('auth-screen').style.display = 'none';
+    document.getElementById('admin-panel').style.display = '';
+    document.getElementById('sidebar-user').textContent = user.username;
+    loadUsers();
+}
+
+// ── Auth Tabs ──────────────────────────────────────────────────
+document.querySelectorAll('.auth-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+        document.querySelectorAll('.auth-tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        const isLogin = tab.dataset.tab === 'login';
+        document.getElementById('login-form').style.display = isLogin ? '' : 'none';
+        document.getElementById('register-form').style.display = isLogin ? 'none' : '';
+    });
+});
+
+// ── Login Form ─────────────────────────────────────────────────
+document.getElementById('login-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const btn = this.querySelector('button[type="submit"]');
+    const err = document.getElementById('login-error');
+    btn.disabled = true; btn.textContent = 'Verificando…'; err.style.display = 'none';
+
+    try {
+        const res = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                username: document.getElementById('login-username').value.trim(),
+                password: document.getElementById('login-password').value
+            })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || data.message || 'Credenciales incorrectas');
+
+        token = data.access_token || data.token;
+        localStorage.setItem('token', token);
+        localStorage.setItem('user', JSON.stringify(data.user));
+
+        if (!data.user?.is_admin) {
+            window.location.href = '/';
+            return;
+        }
+        showAdminPanel(data.user);
+    } catch (ex) {
+        err.textContent = ex.message;
+        err.style.display = 'block';
+    } finally {
+        btn.disabled = false; btn.textContent = 'Entrar';
+    }
+});
+
+// ── Register Form ──────────────────────────────────────────────
+document.getElementById('register-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const btn = this.querySelector('button[type="submit"]');
+    const err = document.getElementById('register-error');
+    btn.disabled = true; btn.textContent = 'Creando…'; err.style.display = 'none';
+
+    try {
+        const res = await fetch('/api/auth/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                username: document.getElementById('reg-username').value.trim(),
+                password: document.getElementById('reg-password').value,
+                is_admin: true
+            })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || data.message || 'Error al registrar');
+
+        token = data.token;
+        localStorage.setItem('token', token);
+        localStorage.setItem('user', JSON.stringify(data.user));
+
+        toast('Cuenta creada correctamente', 'success');
+        showAdminPanel(data.user);
+    } catch (ex) {
+        err.textContent = ex.message;
+        err.style.display = 'block';
+    } finally {
+        btn.disabled = false; btn.textContent = 'Crear cuenta';
+    }
+});
+
+// ── Admin Tabs ─────────────────────────────────────────────────
 document.querySelectorAll('.admin-nav-item').forEach(el => {
     el.addEventListener('click', e => {
         e.preventDefault();
@@ -287,7 +444,6 @@ window.deleteUser = async function(id) {
 
 window.restoreUser = async function(id) {
     const r = await api('POST', `/users/${id}/restore`);
-    // fallback: algunos endpoints usan PATCH
     if (!r.ok) await api('PATCH', `/users/${id}`, { deleted_at: null });
     toast('Usuario restaurado', 'success'); loadUsers();
 };
@@ -372,16 +528,33 @@ document.getElementById('btn-test-ai').addEventListener('click', async () => {
 
 // ── Init ───────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
+    if (!token) {
+        showAuthScreen();
+        return;
+    }
+
+    // Validate token
     const me = await api('GET', '/auth/me');
-    if (!me.ok) { localStorage.clear(); window.location.href = '/login'; return; }
-    if (!me.data?.is_admin) { window.location.href = '/'; return; }
-    document.getElementById('sidebar-user').textContent = me.data.username;
-    loadUsers();
+    if (!me.ok) {
+        localStorage.clear();
+        token = null;
+        showAuthScreen();
+        return;
+    }
+
+    if (!me.data?.is_admin) {
+        window.location.href = '/';
+        return;
+    }
+
+    showAdminPanel(me.data);
 });
 
 document.getElementById('btn-logout').addEventListener('click', () => {
     api('POST', '/auth/logout').finally(() => {
-        localStorage.clear(); window.location.href = '/login';
+        localStorage.clear();
+        token = null;
+        showAuthScreen();
     });
 });
 </script>
