@@ -330,7 +330,14 @@ async function doSync() {
                 try {
                     const ev = JSON.parse(line.slice(5).trim());
                     updateSyncStatus(ev, statusEl);
-                } catch { }
+                    if (ev.status === 'error') {
+                        throw new Error(ev.error || ev.message || 'Error desconocido al sincronizar');
+                    }
+                } catch (e) {
+                    if (!(e instanceof SyntaxError)) {
+                        throw e;
+                    }
+                }
             }
         }
 
@@ -342,19 +349,19 @@ async function doSync() {
         S.syncing = false;
         btn.disabled = false;
         btn.textContent = '🔄 Sincronizar';
-        setTimeout(() => { statusEl.style.display = 'none'; }, 3000);
+        setTimeout(() => { statusEl.style.display = 'none'; }, 5000);
     }
 }
 
 function updateSyncStatus(ev, el) {
     const phase = ev.phase || '';
-    const msg = ev.message || '';
+    const msg = ev.message || ev.error || '';
     const cur = ev.current ?? 0;
     const tot = ev.total ?? 0;
     const pct = tot > 0 ? Math.round((cur / tot) * 100) : 0;
     el.innerHTML = `
         <div>${phase ? `[${phase}] ` : ''}${escHtml(msg)}</div>
-        ${tot > 0 ? `<div>${cur}/${tot}</div>
+        ${tot > 0 ? `<div>${cur}/${tot} completados (${pct}%)</div>
         <div class="sync-bar"><div class="sync-bar-fill" style="width:${pct}%"></div></div>` : ''}
     `;
 }
@@ -369,7 +376,7 @@ function openCompose(mode = 'new', originalMsg = null) {
 
     // Populate from accounts
     const sel = document.getElementById('compose-from');
-    sel.innerHTML = S.accounts.map(a => `<option value="${a.id}">${a.email}</option>`).join('');
+    sel.innerHTML = S.accounts.map(a => `<option value="${a.id}">${a.email_address}</option>`).join('');
     if (S.selectedAccount) sel.value = S.selectedAccount;
 
     // Pre-fill fields
