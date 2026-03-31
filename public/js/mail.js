@@ -161,6 +161,29 @@ function escHtml(s) {
     return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+function buildPreviewHtml(message) {
+    let html = String(message?.body_html || '');
+    if (!html) return '';
+
+    const attachments = Array.isArray(message?.attachments) ? message.attachments : [];
+    const imageAttachments = attachments.filter(a => String(a?.mime_type || '').toLowerCase().startsWith('image/'));
+    const firstImageUrl = imageAttachments[0]?.id ? `/api/attachments/${imageAttachments[0].id}/download` : null;
+
+    // Resolver referencias cid:... usadas por correos HTML para imágenes inline.
+    html = html.replace(/src\s*=\s*(['"])cid:([^'"]+)\1/gi, (full, quote, cidValue) => {
+        const cid = String(cidValue || '').toLowerCase();
+        const match = imageAttachments.find((a) => {
+            const name = String(a?.filename || '').toLowerCase();
+            return name && (cid.includes(name) || name.includes(cid));
+        });
+        const url = match?.id ? `/api/attachments/${match.id}/download` : firstImageUrl;
+        if (!url) return full;
+        return `src=${quote}${url}${quote}`;
+    });
+
+    return html;
+}
+
 /* ── Render: message viewer ─────────────────────────────────────── */
 async function renderViewer(msg) {
     const pane = document.getElementById('detail-pane');
@@ -178,8 +201,9 @@ async function renderViewer(msg) {
             target="_blank" rel="noopener" onclick="dlAttachment(event,${a.id})">📎 ${escHtml(a.filename)}</a>`
     ).join('');
 
-    const bodyHtml = m.body_html
-        ? `<div class="viewer-body-html"><iframe srcdoc="${escHtml(m.body_html)}" sandbox="allow-same-origin"></iframe></div>`
+    const previewHtml = buildPreviewHtml(m);
+    const bodyHtml = previewHtml
+        ? `<div class="viewer-body-html"><iframe srcdoc="${escHtml(previewHtml)}" sandbox="allow-same-origin"></iframe></div>`
         : `<div class="viewer-body-text">${escHtml(m.body_text || '')}</div>`;
 
     viewer.innerHTML = `
@@ -523,8 +547,9 @@ window.openMessageLarge = async function (id) {
         return;
     }
     const m = r.data;
-    const body = m.body_html
-        ? `<div class="viewer-body-html"><iframe srcdoc="${escHtml(m.body_html)}" sandbox="allow-same-origin"></iframe></div>`
+    const previewHtml = buildPreviewHtml(m);
+    const body = previewHtml
+        ? `<div class="viewer-body-html"><iframe srcdoc="${escHtml(previewHtml)}" sandbox="allow-same-origin"></iframe></div>`
         : `<div class="viewer-body-text">${escHtml(m.body_text || '')}</div>`;
     document.getElementById('message-large-content').innerHTML = `
         <div class="viewer-subject">${escHtml(m.subject || '(Sin asunto)')}</div>
@@ -600,7 +625,10 @@ function openAccountModal(acc = null) {
     S.editingAccountId = acc?.id || null;
     document.getElementById('account-modal-title').textContent = acc ? 'Editar cuenta' : 'Añadir cuenta';
     document.getElementById('acc-name').value = acc?.username || '';
-    document.getElementById('acc-email').value = acc?.email_address || '';
+    const platformEmail = S.user?.username || '';
+    document.getElementById('acc-email').value = platformEmail || acc?.email_address || '';
+    document.getElementById('acc-email').readOnly = true;
+    document.getElementById('acc-email').title = 'Se usa automáticamente el email del registro en la plataforma';
     document.getElementById('acc-password').value = '';
     document.getElementById('acc-imap-host').value = acc?.imap_host || '';
     document.getElementById('acc-imap-port').value = acc?.imap_port || 993;
@@ -614,7 +642,7 @@ function openAccountModal(acc = null) {
 }
 
 async function saveAccount() {
-    const emailStr = document.getElementById('acc-email').value.trim();
+    const emailStr = (S.user?.username || document.getElementById('acc-email').value || '').trim();
     const imapHost = document.getElementById('acc-imap-host').value.trim();
     const imapPort = parseInt(document.getElementById('acc-imap-port').value);
     const rawPassword = document.getElementById('acc-password').value;

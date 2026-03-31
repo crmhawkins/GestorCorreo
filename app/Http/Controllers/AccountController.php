@@ -9,10 +9,20 @@ use App\Services\ImapService;
 use App\Services\Pop3Service;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Hash;
 
 class AccountController extends Controller
 {
     public function __construct(private EncryptionService $encryption) {}
+
+    private function getPlatformEmailOrError($user): array
+    {
+        $platformEmail = (string)($user->username ?? '');
+        if (!filter_var($platformEmail, FILTER_VALIDATE_EMAIL)) {
+            return [null, response()->json(['error' => 'Tu usuario de plataforma debe ser un email válido para configurar la cuenta de correo.'], 422)];
+        }
+        return [$platformEmail, null];
+    }
 
     private function inferProtocol(array $data): string
     {
@@ -173,14 +183,16 @@ class AccountController extends Controller
     public function store(Request $request): JsonResponse
     {
         $user = $request->user();
+        [$platformEmail, $platformEmailError] = $this->getPlatformEmailOrError($user);
+        if ($platformEmailError) return $platformEmailError;
 
         $validated = $request->validate([
-            'email_address'                 => 'required|email|max:255',
+            'email_address'                 => 'sometimes|email|max:255',
             'imap_host'                     => 'required|string|max:255',
             'imap_port'                     => 'required|integer|min:1|max:65535',
             'smtp_host'                     => 'required|string|max:255',
             'smtp_port'                     => 'required|integer|min:1|max:65535',
-            'username'                      => 'required|string|max:255',
+            'username'                      => 'sometimes|string|max:255',
             'password'                      => 'required|string',
             'protocol'                      => 'sometimes|in:imap,pop3',
             'is_active'                     => 'sometimes|boolean',
@@ -193,16 +205,20 @@ class AccountController extends Controller
             'mailbox_storage_limit'         => 'sometimes|integer|min:0',
         ]);
 
+        if (!Hash::check($validated['password'], $user->password_hash)) {
+            return response()->json(['error' => 'La contraseña debe ser exactamente la misma que usas para entrar en la plataforma.'], 422);
+        }
+
         $encryptedPassword = $this->encryption->encrypt($validated['password']);
 
         $account = Account::create([
             'user_id'                       => $user->id,
-            'email_address'                 => $validated['email_address'],
+            'email_address'                 => $platformEmail,
             'imap_host'                     => $validated['imap_host'],
             'imap_port'                     => $validated['imap_port'],
             'smtp_host'                     => $validated['smtp_host'],
             'smtp_port'                     => $validated['smtp_port'],
-            'username'                      => $validated['username'],
+            'username'                      => $platformEmail,
             'encrypted_password'            => $encryptedPassword,
             'protocol'                      => $this->inferProtocol($validated),
             'is_active'                     => $validated['is_active']          ?? true,
@@ -245,6 +261,8 @@ class AccountController extends Controller
     public function update(Request $request, int $id): JsonResponse
     {
         $user    = $request->user();
+        [$platformEmail, $platformEmailError] = $this->getPlatformEmailOrError($user);
+        if ($platformEmailError) return $platformEmailError;
         $account = Account::where('id', $id)
             ->where('user_id', $user->id)
             ->where('is_deleted', false)
@@ -275,9 +293,14 @@ class AccountController extends Controller
 
         // Si viene nueva password, encriptarla
         if (isset($validated['password']) && trim((string)$validated['password']) !== '') {
+            if (!Hash::check((string)$validated['password'], $user->password_hash)) {
+                return response()->json(['error' => 'La contraseña debe ser exactamente la misma que usas para entrar en la plataforma.'], 422);
+            }
             $validated['encrypted_password'] = $this->encryption->encrypt($validated['password']);
         }
         unset($validated['password']);
+        $validated['email_address'] = $platformEmail;
+        $validated['username'] = $platformEmail;
 
         if (
             array_key_exists('protocol', $validated) ||
