@@ -39,7 +39,13 @@
         </div>
 
         <div class="folders-section">
-            <h3>Carpetas</h3>
+            <div class="accounts-header">
+                <h3>Carpetas</h3>
+                <div style="display:flex; gap:.25rem;">
+                    <button class="btn-icon" id="btn-add-folder" title="Crear carpeta personalizada">+</button>
+                    <button class="btn-icon" id="btn-delete-folder" title="Eliminar carpeta seleccionada">🗑</button>
+                </div>
+            </div>
             <div id="folders-list">
                 <div class="folder-item active" data-filter="all">
                     Bandeja de entrada <span class="total-count" id="count-all"></span>
@@ -65,7 +71,7 @@
 
         <div class="toolbar">
             <div class="toolbar-left">
-                <input type="text" id="search-input" class="search-input" placeholder="Buscar mensajes…">
+                <input type="text" id="search-input" class="search-input" placeholder="Buscar mensajes…" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
                 <div class="form-row" style="margin-top:.4rem; gap:.4rem; align-items:center;">
                     <input type="date" id="filter-date-from" class="form-control" style="max-width:160px">
                     <input type="date" id="filter-date-to" class="form-control" style="max-width:160px">

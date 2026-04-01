@@ -419,6 +419,54 @@ async function loadCategories() {
     loadUnreadCounts();
 }
 
+function getCustomCategoryByKey(key) {
+    const builtins = new Set(['Interesantes', 'Servicios', 'EnCopia', 'SPAM']);
+    return (S.categories || []).find(c => c?.key === key && !builtins.has(c.key));
+}
+
+async function createCustomFolder() {
+    const name = (window.prompt('Nombre de la carpeta personalizada:', '') || '').trim();
+    if (!name) return;
+    const key = name
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-zA-Z0-9]+/g, '_')
+        .replace(/^_+|_+$/g, '')
+        .slice(0, 100) || `cat_${Date.now()}`;
+    const aiInstruction = (window.prompt('Instrucción para IA (opcional):', `Correos relacionados con ${name}.`) || '').trim();
+
+    const r = await api('POST', '/categories', {
+        key,
+        name,
+        ai_instruction: aiInstruction || null,
+        is_system: false,
+    });
+    if (!r?.ok) {
+        toast(r?.data?.error || r?.data?.message || 'No se pudo crear la carpeta', 'error');
+        return;
+    }
+    toast('Carpeta creada', 'success');
+    await loadCategories();
+}
+
+async function deleteSelectedFolder() {
+    const category = getCustomCategoryByKey(S.filter);
+    if (!category) {
+        toast('Selecciona una carpeta personalizada para eliminarla', 'info');
+        return;
+    }
+    if (!confirm(`¿Eliminar la carpeta "${category.name}"?`)) return;
+    const r = await api('DELETE', `/categories/${category.id}`);
+    if (!r?.ok) {
+        toast(r?.data?.error || r?.data?.message || 'No se pudo eliminar la carpeta', 'error');
+        return;
+    }
+    if (S.filter === category.key) S.filter = 'all';
+    toast('Carpeta eliminada', 'success');
+    await loadCategories();
+    await loadMessages(true);
+}
+
 function bindFolderEvents() {
     document.querySelectorAll('.folder-item').forEach(el => {
         if (el.dataset.bound === '1') return;
@@ -929,6 +977,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('btn-compose').addEventListener('click', () => openCompose('new'));
     document.getElementById('btn-logout').addEventListener('click', doLogout);
     document.getElementById('btn-add-account').addEventListener('click', () => openAccountModal());
+    document.getElementById('btn-add-folder').addEventListener('click', createCustomFolder);
+    document.getElementById('btn-delete-folder').addEventListener('click', deleteSelectedFolder);
     document.getElementById('btn-mark-read').addEventListener('click', markAllRead);
     document.getElementById('filter-date-from').addEventListener('change', (e) => { S.dateFrom = e.target.value; loadMessages(); });
     document.getElementById('filter-date-to').addEventListener('change', (e) => { S.dateTo = e.target.value; loadMessages(); });
