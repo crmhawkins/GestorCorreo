@@ -143,15 +143,15 @@ function renderMessages() {
              onclick="openMessage('${m.id}')" ondblclick="openMessageLarge('${m.id}')">
             <div class="message-from">
                 ${m.is_read ? '' : '<span title="No leído">🔵</span>'}
-                ${escHtml(m.folder === 'Sent' ? (`Para: ${getPrimaryTo(m) || '(sin destinatario)'}`) : (m.from_name || m.from_email || ''))}
+                ${escHtml(isSentLikeMessage(m) ? (`Para: ${getPrimaryTo(m) || '(sin destinatario)'}`) : (m.from_name || m.from_email || ''))}
                 ${badge(m.classification_label)}
             </div>
             <div class="message-date">${fmtDate(m.date)}</div>
             <div class="message-subject">${escHtml(m.subject || '(Sin asunto)')}</div>
             <div class="message-snippet">${escHtml(m.snippet || '')}</div>
             <div class="message-meta">
-                ${(String(m.subject || '').trim().toLowerCase().startsWith('fwd:') || String(m.subject || '').trim().toLowerCase().startsWith('fw:')) ? '<span title="Reenviado">↪</span>' : ''}
-                ${String(m.subject || '').trim().toLowerCase().startsWith('re:') ? '<span title="Respondido">↩</span>' : ''}
+                ${isForwardedMessage(m) ? '<span title="Reenviado">↪</span>' : ''}
+                ${isRepliedMessage(m) ? '<span title="Respondido">↩</span>' : ''}
                 ${m.has_attachments ? '<span>📎</span>' : ''}
                 <button class="btn-star" onclick="toggleStar(event,'${m.id}',${m.is_starred})"
                     title="${m.is_starred ? 'Quitar estrella' : 'Marcar'}">${m.is_starred ? '⭐' : '☆'}</button>
@@ -212,6 +212,25 @@ function getPrimaryTo(message) {
         if (to[0] && typeof to[0] === 'object') return to[0].email || '';
     }
     return message?.to_email || '';
+}
+
+function isSentLikeMessage(message) {
+    const from = String(message?.from_email || '').toLowerCase();
+    const me = String(S.user?.username || '').toLowerCase();
+    const hasTo = !!getPrimaryTo(message);
+    return message?.folder === 'Sent' || (from !== '' && me !== '' && from === me && hasTo);
+}
+
+function isForwardedMessage(message) {
+    const subject = String(message?.subject || '').trim().toLowerCase();
+    const snippet = String(message?.snippet || '').toLowerCase();
+    return subject.startsWith('fwd:') || subject.startsWith('fw:') || snippet.includes('mensaje reenviado');
+}
+
+function isRepliedMessage(message) {
+    const subject = String(message?.subject || '').trim().toLowerCase();
+    const snippet = String(message?.snippet || '').toLowerCase();
+    return subject.startsWith('re:') || snippet.includes('mensaje original');
 }
 
 function buildPreviewHtml(message) {
