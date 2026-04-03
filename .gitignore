@@ -36,3 +36,6 @@ Homestead.json
 Homestead.yaml
 npm-debug.log
 yarn-error.log
+frontend/dev.log
+laravel-backend/storage/logs/laravel.log
+laravel-backend/storage/logs/serve.log
