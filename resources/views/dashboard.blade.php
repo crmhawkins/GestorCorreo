@@ -174,8 +174,9 @@
                 <input type="email" id="acc-email" class="form-control" placeholder="usuario@dominio.com">
             </div>
             <div class="form-group">
-                <label>Contraseña</label>
-                <input type="password" id="acc-password" class="form-control" placeholder="Se usa automáticamente la contraseña del registro" readonly disabled>
+                <label>Contraseña de correo (IONOS)</label>
+                <input type="password" id="acc-password" class="form-control" placeholder="Contraseña de acceso al correo">
+                <small id="acc-password-hint" class="form-hint" style="color:#888;font-size:0.82em"></small>
             </div>
 
             <hr class="form-divider">

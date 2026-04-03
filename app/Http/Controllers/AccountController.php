@@ -9,7 +9,6 @@ use App\Services\ImapService;
 use App\Services\Pop3Service;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Facades\Hash;
 
 class AccountController extends Controller
 {
@@ -179,6 +178,67 @@ class AccountController extends Controller
     }
 
     /**
+     * PUT /admin/accounts/{id}
+     * Admin: actualiza cualquier cuenta (incluida la contraseña de email).
+     */
+    public function updateAdmin(Request $request, int $id): JsonResponse
+    {
+        $admin = $request->user();
+
+        if (!$admin->is_admin) {
+            return response()->json(['error' => 'No autorizado.'], 403);
+        }
+
+        $account = Account::where('id', $id)->where('is_deleted', false)->first();
+
+        if (!$account) {
+            return response()->json(['error' => 'Cuenta no encontrada.'], 404);
+        }
+
+        $validated = $request->validate([
+            'email_address'                 => 'sometimes|email|max:255',
+            'imap_host'                     => 'sometimes|string|max:255',
+            'imap_port'                     => 'sometimes|integer|min:1|max:65535',
+            'smtp_host'                     => 'sometimes|string|max:255',
+            'smtp_port'                     => 'sometimes|integer|min:1|max:65535',
+            'username'                      => 'sometimes|string|max:255',
+            'password'                      => 'sometimes|nullable|string',
+            'protocol'                      => 'sometimes|in:imap,pop3',
+            'is_active'                     => 'sometimes|boolean',
+            'ssl_verify'                    => 'sometimes|boolean',
+            'connection_timeout'            => 'sometimes|integer|min:5|max:300',
+            'auto_classify'                 => 'sometimes|boolean',
+            'auto_sync_interval'            => 'sometimes|integer|min:0',
+            'custom_classification_prompt'  => 'sometimes|nullable|string',
+            'owner_profile'                 => 'sometimes|nullable|string|max:1000',
+            'signature_html'                => 'sometimes|nullable|string|max:20000',
+            'mailbox_storage_limit'         => 'sometimes|integer|min:0',
+        ]);
+
+        if (isset($validated['password']) && trim((string)$validated['password']) !== '') {
+            $validated['encrypted_password'] = $this->encryption->encrypt($validated['password']);
+        }
+        unset($validated['password']);
+
+        if (
+            array_key_exists('protocol', $validated) ||
+            array_key_exists('imap_host', $validated) ||
+            array_key_exists('imap_port', $validated)
+        ) {
+            $validated['protocol'] = $this->inferProtocol($validated + [
+                'imap_host' => $account->imap_host,
+                'imap_port' => $account->imap_port,
+                'protocol'  => $account->protocol,
+            ]);
+        }
+
+        $account->fill($validated);
+        $account->save();
+
+        return response()->json(['account' => $account]);
+    }
+
+    /**
      * POST /accounts
      * Crea una nueva cuenta de correo para el usuario autenticado.
      */
@@ -207,10 +267,6 @@ class AccountController extends Controller
             'signature_html'                => 'sometimes|nullable|string|max:20000',
             'mailbox_storage_limit'         => 'sometimes|integer|min:0',
         ]);
-
-        if (!Hash::check($validated['password'], $user->password_hash)) {
-            return response()->json(['error' => 'La contraseña debe ser exactamente la misma que usas para entrar en la plataforma.'], 422);
-        }
 
         $encryptedPassword = $this->encryption->encrypt($validated['password']);
 
@@ -298,9 +354,6 @@ class AccountController extends Controller
 
         // Si viene nueva password, encriptarla
         if (isset($validated['password']) && trim((string)$validated['password']) !== '') {
-            if (!Hash::check((string)$validated['password'], $user->password_hash)) {
-                return response()->json(['error' => 'La contraseña debe ser exactamente la misma que usas para entrar en la plataforma.'], 422);
-            }
             $validated['encrypted_password'] = $this->encryption->encrypt($validated['password']);
         }
         unset($validated['password']);
