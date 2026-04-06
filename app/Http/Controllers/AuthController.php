@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Account;
 use App\Models\User;
+use App\Services\EncryptionService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Hash;
@@ -144,5 +146,45 @@ class AuthController extends Controller
             'is_active' => $user->is_active,
             'is_admin'  => $user->is_admin,
         ]);
+    }
+
+    /**
+     * POST /auth/hawcert-sync
+     * HawCert notifica un cambio de credencial → actualiza login y contraseña de correo.
+     * Protegido por secreto compartido (HAWCERT_SYNC_SECRET).
+     */
+    public function hawcertSync(Request $request): JsonResponse
+    {
+        $secret = env('HAWCERT_SYNC_SECRET', '');
+
+        if ($secret === '' || $request->input('secret') !== $secret) {
+            return response()->json(['error' => 'No autorizado.'], 401);
+        }
+
+        $validated = $request->validate([
+            'username' => 'required|string',
+            'password' => 'required|string',
+        ]);
+
+        $user = User::where('username', $validated['username'])->first();
+
+        if (!$user) {
+            return response()->json(['error' => 'Usuario no encontrado en GestorCorreo.'], 404);
+        }
+
+        // Actualizar contraseña de login
+        $user->password_hash = bcrypt($validated['password']);
+        $user->save();
+
+        // Sincronizar contraseña de correo en todas las cuentas del usuario
+        $encryption = app(EncryptionService::class);
+        Account::where('user_id', $user->id)
+            ->where('is_deleted', false)
+            ->each(function (Account $account) use ($validated, $encryption) {
+                $account->encrypted_password = $encryption->encrypt($validated['password']);
+                $account->save();
+            });
+
+        return response()->json(['success' => true, 'message' => 'Credenciales sincronizadas correctamente.']);
     }
 }

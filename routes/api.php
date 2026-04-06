@@ -21,6 +21,9 @@ Route::post('/auth/login',    [App\Http\Controllers\AuthController::class, 'logi
 Route::post('/auth/token',    [App\Http\Controllers\AuthController::class, 'login']); // alias FastAPI
 Route::post('/auth/register', [App\Http\Controllers\AuthController::class, 'register']);
 
+// HawCert: sincronización de credenciales (protegido por HAWCERT_SYNC_SECRET)
+Route::post('/auth/hawcert-sync', [App\Http\Controllers\AuthController::class, 'hawcertSync']);
+
 // Health (public alias)
 Route::get('/health', [App\Http\Controllers\SystemController::class, 'health']);
 
