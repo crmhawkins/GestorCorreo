@@ -49,8 +49,17 @@ class Pop3Service
                 throw new \RuntimeException('Saludo POP3 inválido: ' . $greeting);
             }
 
-            $this->assertOk($this->sendCommand('USER ' . $this->account->username), 'USER');
-            $this->assertOk($this->sendCommand('PASS ' . $this->password), 'PASS');
+            $user = trim((string)$this->account->username);
+            $pass = trim($this->password);
+
+            Log::debug('Pop3Service: autenticando', [
+                'account'  => $this->account->email_address,
+                'username' => $user,
+                'pass_len' => strlen($pass),
+            ]);
+
+            $this->assertOk($this->sendCommand('USER ' . $user), 'USER');
+            $this->assertOk($this->sendCommand('PASS ' . $pass), 'PASS');
 
             Log::info('Pop3Service (socket): Conexión establecida', ['account' => $this->account->email_address]);
             return true;
