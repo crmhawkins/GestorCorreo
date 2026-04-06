@@ -966,6 +966,43 @@ async function markAllRead() {
 }
 
 /* ── Event listeners ────────────────────────────────────────────── */
+/* ── Mail password setup modal ──────────────────────────────────── */
+function promptMailPassword() {
+    return new Promise((resolve) => {
+        const modal  = document.getElementById('modal-mail-password');
+        const input  = document.getElementById('mail-password-input');
+        const errEl  = document.getElementById('mail-password-error');
+        const btn    = document.getElementById('btn-set-mail-password');
+
+        modal.style.display = 'flex';
+        setTimeout(() => input.focus(), 100);
+
+        btn.onclick = async () => {
+            const pwd = input.value.trim();
+            errEl.style.display = 'none';
+            if (!pwd) {
+                errEl.textContent = 'Introduce tu contraseña de correo.';
+                errEl.style.display = '';
+                return;
+            }
+            btn.disabled = true;
+            btn.textContent = 'Guardando…';
+            const r = await api('POST', '/users/me/set-mail-password', { mail_password: pwd });
+            btn.disabled = false;
+            btn.textContent = 'Guardar y continuar';
+            if (r.ok) {
+                S.user.mail_password_required = false;
+                localStorage.setItem('user', JSON.stringify(S.user));
+                modal.style.display = 'none';
+                resolve();
+            } else {
+                errEl.textContent = r.data?.message || r.data?.error || 'Error al guardar. Inténtalo de nuevo.';
+                errEl.style.display = '';
+            }
+        };
+    });
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
     applyUiFontSize(localStorage.getItem('ui_font_size') || '13');
     renderUser();
@@ -973,6 +1010,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Auth check
     const me = await api('GET', '/auth/me');
     if (!me || !me.ok) { doLogout(); return; }
+
+    // Actualizar user en estado local con datos frescos del servidor
+    if (me.data?.user) {
+        S.user = me.data.user;
+        localStorage.setItem('user', JSON.stringify(S.user));
+    }
+
+    // Si el admin ha solicitado que el usuario introduzca su contraseña de correo
+    if (S.user?.mail_password_required) {
+        await promptMailPassword();
+    }
 
     await loadAccounts();
     await loadCategories();

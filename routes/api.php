@@ -43,8 +43,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/users',                      [App\Http\Controllers\UserController::class, 'store']);
     Route::put('/users/{id}',                  [App\Http\Controllers\UserController::class, 'update']);
     Route::delete('/users/{id}',               [App\Http\Controllers\UserController::class, 'destroy']);
-    Route::put('/users/{id}/password',         [App\Http\Controllers\UserController::class, 'updatePassword']);
-    Route::put('/users/{id}/reset-mail-password', [App\Http\Controllers\UserController::class, 'resetMailPassword']);
+    Route::put('/users/{id}/password',              [App\Http\Controllers\UserController::class, 'updatePassword']);
+    Route::post('/users/{id}/require-mail-password', [App\Http\Controllers\UserController::class, 'requireMailPassword']);
+    Route::post('/users/me/set-mail-password',        [App\Http\Controllers\UserController::class, 'setMyMailPassword']);
 
     // Accounts
     Route::apiResource('accounts', App\Http\Controllers\AccountController::class);

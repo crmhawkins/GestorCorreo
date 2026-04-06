@@ -102,6 +102,25 @@
     </div>
 </div>
 
+<!-- ── MODAL: Contraseña de correo requerida (bloqueante) ── -->
+<div id="modal-mail-password" style="display:none;position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,.7);align-items:center;justify-content:center">
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:2rem 2.25rem;width:100%;max-width:420px;box-shadow:0 12px 40px rgba(0,0,0,.45)">
+        <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:1.25rem">
+            <div style="width:36px;height:36px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:1.1rem;flex-shrink:0">🔑</div>
+            <div>
+                <div style="font-weight:600;color:var(--text-bright);font-size:.95rem">Configuración requerida</div>
+                <div style="font-size:.78rem;color:var(--text-dim);margin-top:.15rem">El administrador ha solicitado que introduzcas tu contraseña de correo</div>
+            </div>
+        </div>
+        <div class="form-group" style="margin-bottom:1rem">
+            <label style="font-size:.8rem;color:var(--text-dim);display:block;margin-bottom:.4rem">Contraseña del correo IONOS</label>
+            <input id="mail-password-input" type="password" class="form-control" placeholder="Introduce tu contraseña de correo" autocomplete="current-password">
+        </div>
+        <div id="mail-password-error" style="display:none;font-size:.8rem;color:#f87171;margin-bottom:.75rem"></div>
+        <button id="btn-set-mail-password" class="btn-primary" style="width:100%">Guardar y continuar</button>
+    </div>
+</div>
+
 <!-- ── MODAL: Compose ── -->
 <div class="modal-overlay" id="modal-compose" style="display:none">
     <div class="modal-box compose-box">

@@ -523,22 +523,10 @@ window.changePassword = async function(id, username) {
 };
 
 window.resetMailPassword = async function(id, username) {
-    openInputModal({
-        title:       `Reinicializar correo — ${username}`,
-        label:       'Contraseña del correo IONOS',
-        hint:        'Se actualizará en todas las cuentas de correo del usuario',
-        placeholder: 'Contraseña IONOS',
-        onConfirm: async (val, errEl) => {
-            const r = await api('PUT', `/users/${id}/reset-mail-password`, { mail_password: val });
-            if (r.ok) {
-                toast(r.data?.message || 'Contraseña de correo actualizada', 'success');
-                document.getElementById('modal-input').style.display = 'none';
-            } else {
-                errEl.textContent = r.data?.error || r.data?.message || 'Error';
-                errEl.style.display = '';
-            }
-        }
-    });
+    if (!confirm(`¿Solicitar a "${username}" que introduzca su contraseña de correo la próxima vez que entre?`)) return;
+    const r = await api('POST', `/users/${id}/require-mail-password`);
+    if (r.ok) toast(`Se solicitará a ${username} su contraseña de correo al próximo inicio`, 'success');
+    else toast(r.data?.error || r.data?.message || 'Error', 'error');
 };
 
 // ── All Accounts ───────────────────────────────────────────────

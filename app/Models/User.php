@@ -24,6 +24,7 @@ class User extends Authenticatable
         'password_hash',
         'is_active',
         'is_admin',
+        'mail_password_required',
     ];
 
     /**
@@ -37,9 +38,10 @@ class User extends Authenticatable
      * The attributes that should be cast.
      */
     protected $casts = [
-        'is_active' => 'boolean',
-        'is_admin'  => 'boolean',
-        'deleted_at' => 'datetime',
+        'is_active'              => 'boolean',
+        'is_admin'               => 'boolean',
+        'mail_password_required' => 'boolean',
+        'deleted_at'             => 'datetime',
     ];
 
     /**

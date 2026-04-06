@@ -45,10 +45,11 @@ class AuthController extends Controller
             'token'        => $token,
             'token_type'   => 'bearer',
             'user'  => [
-                'id'       => $user->id,
-                'username' => $user->username,
-                'is_active' => $user->is_active,
-                'is_admin'  => $user->is_admin,
+                'id'                     => $user->id,
+                'username'               => $user->username,
+                'is_active'              => $user->is_active,
+                'is_admin'               => $user->is_admin,
+                'mail_password_required' => (bool) $user->mail_password_required,
             ],
         ]);
     }
@@ -141,10 +142,13 @@ class AuthController extends Controller
         }
 
         return response()->json([
-            'id'       => $user->id,
-            'username' => $user->username,
-            'is_active' => $user->is_active,
-            'is_admin'  => $user->is_admin,
+            'user' => [
+                'id'                     => $user->id,
+                'username'               => $user->username,
+                'is_active'              => $user->is_active,
+                'is_admin'               => $user->is_admin,
+                'mail_password_required' => (bool) $user->mail_password_required,
+            ],
         ]);
     }
 

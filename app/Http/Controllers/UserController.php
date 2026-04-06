@@ -146,16 +146,28 @@ class UserController extends Controller
         return response()->json(['message' => 'Usuario eliminado.']);
     }
 
-    /** PUT /users/{id}/reset-mail-password — solo admin, actualiza encrypted_password de todas las cuentas del usuario */
-    public function resetMailPassword(Request $request, int $id): JsonResponse
+    /** POST /users/{id}/require-mail-password — solo admin, fuerza al usuario a introducir su contraseña de correo en el próximo login */
+    public function requireMailPassword(Request $request, int $id): JsonResponse
     {
-        $currentUser = $request->user();
-        if (!$currentUser?->is_admin) {
+        if (!$request->user()?->is_admin) {
             return response()->json(['error' => 'Solo administradores.'], 403);
         }
-        $validated = $request->validate(['mail_password' => 'required|string|min:1']);
         $user = User::find($id);
         if (!$user) return response()->json(['error' => 'Usuario no encontrado.'], 404);
+
+        $user->mail_password_required = true;
+        $user->save();
+
+        return response()->json(['message' => 'Se solicitará la contraseña de correo al próximo inicio de sesión.']);
+    }
+
+    /** POST /users/me/set-mail-password — el propio usuario introduce su contraseña de correo cuando se le pide */
+    public function setMyMailPassword(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        if (!$user) return response()->json(['error' => 'No autenticado.'], 401);
+
+        $validated = $request->validate(['mail_password' => 'required|string|min:1']);
 
         $encryption = app(EncryptionService::class);
         $updated = 0;
@@ -168,7 +180,11 @@ class UserController extends Controller
                 $updated++;
             });
 
-        return response()->json(['message' => "Contraseña de correo actualizada en {$updated} cuenta(s).", 'updated' => $updated]);
+        // Quitar el flag
+        $user->mail_password_required = false;
+        $user->save();
+
+        return response()->json(['message' => "Contraseña de correo guardada en {$updated} cuenta(s).", 'updated' => $updated]);
     }
 
     /** PUT /users/{id}/password */
