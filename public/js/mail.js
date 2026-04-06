@@ -872,10 +872,10 @@ function openAccountModal(acc = null) {
     const pwd = document.getElementById('acc-password');
     const pwdHint = document.getElementById('acc-password-hint');
     pwd.value = '';
-    pwd.readOnly = true;
-    pwd.disabled = true;
-    pwd.placeholder = 'Se gestiona automáticamente';
-    if (pwdHint) pwdHint.textContent = '';
+    pwd.readOnly = false;
+    pwd.disabled = false;
+    pwd.placeholder = acc ? 'Dejar vacío para no cambiarla' : 'Contraseña del correo IONOS';
+    if (pwdHint) pwdHint.textContent = acc ? 'Solo rellena si quieres actualizar la contraseña' : '';
     document.getElementById('acc-imap-host').value = acc?.imap_host || 'pop.ionos.es';
     document.getElementById('acc-imap-port').value = acc?.imap_port || 995;
     document.getElementById('acc-imap-ssl').value = acc?.imap_ssl ? '1' : '0';
@@ -911,11 +911,20 @@ async function saveAccount() {
         custom_classification_prompt: document.getElementById('acc-custom-classification-prompt').value.trim(),
         signature_html: document.getElementById('acc-signature-html').value,
     };
-    if (!S.editingAccountId && tempPlatformPassword) {
-        body.password = tempPlatformPassword;
-    } else if (!S.editingAccountId) {
-        toast('Para la primera configuración debes iniciar sesión de nuevo.', 'error');
-        return;
+    const pwdVal = document.getElementById('acc-password').value;
+    if (S.editingAccountId) {
+        // Al editar: incluir contraseña solo si el usuario la ha rellenado
+        if (pwdVal) body.password = pwdVal;
+    } else {
+        // Al crear: usar la introducida o la temporal de sesión
+        if (pwdVal) {
+            body.password = pwdVal;
+        } else if (tempPlatformPassword) {
+            body.password = tempPlatformPassword;
+        } else {
+            toast('Introduce la contraseña del correo IONOS.', 'error');
+            return;
+        }
     }
     if (!body.email_address) { toast('El email es obligatorio', 'error'); return; }
 

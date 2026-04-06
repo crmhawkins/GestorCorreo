@@ -62,56 +62,87 @@ class SyncController extends Controller
         $user = $request->user();
 
         $validated = $request->validate([
-            'account_id' => 'required|integer',
+            'account_id' => 'nullable|integer',
         ]);
 
-        $account = Account::where('id', $validated['account_id'])
-            ->where('user_id', $user->id)
-            ->where('is_deleted', false)
-            ->where('is_active', true)
-            ->first();
+        $sse = [
+            'Content-Type'      => 'text/event-stream',
+            'Cache-Control'     => 'no-cache',
+            'X-Accel-Buffering' => 'no',
+        ];
 
-        if (!$account) {
-            // En SSE no podemos devolver un código 404 normal fácilmente,
-            // devolvemos un stream con error
-            return response()->stream(function () {
-                echo "data: " . json_encode(['status' => 'error', 'error' => 'Cuenta no encontrada o inactiva.']) . "\n\n";
-                if (ob_get_level() > 0) ob_flush();
-                flush();
-            }, 200, [
-                'Content-Type'     => 'text/event-stream',
-                'Cache-Control'    => 'no-cache',
-                'X-Accel-Buffering' => 'no',
-            ]);
+        $emit = function (array $payload) {
+            echo "data: " . json_encode($payload) . "\n\n";
+            if (ob_get_level() > 0) ob_flush();
+            flush();
+        };
+
+        // Resolver cuentas a sincronizar
+        if (!empty($validated['account_id'])) {
+            $accounts = Account::where('id', $validated['account_id'])
+                ->where('user_id', $user->id)
+                ->where('is_deleted', false)
+                ->where('is_active', true)
+                ->get();
+        } else {
+            $accounts = Account::where('user_id', $user->id)
+                ->where('is_deleted', false)
+                ->where('is_active', true)
+                ->get();
         }
 
-        try {
-            $password = $this->encryption->decrypt($account->encrypted_password);
-        } catch (\Throwable $e) {
-            return response()->stream(function () use ($e) {
-                echo "data: " . json_encode(['status' => 'error', 'error' => 'No se pudo desencriptar la contraseña: ' . $e->getMessage()]) . "\n\n";
-                if (ob_get_level() > 0) ob_flush();
-                flush();
-            }, 200, [
-                'Content-Type'     => 'text/event-stream',
-                'Cache-Control'    => 'no-cache',
-                'X-Accel-Buffering' => 'no',
-            ]);
+        if ($accounts->isEmpty()) {
+            return response()->stream(function () use ($emit) {
+                $emit(['status' => 'error', 'error' => 'No hay cuentas activas para sincronizar.']);
+            }, 200, $sse);
+        }
+
+        // Desencriptar contraseñas antes de abrir el stream
+        $accountsWithPass = [];
+        foreach ($accounts as $account) {
+            try {
+                $accountsWithPass[] = [
+                    'account'  => $account,
+                    'password' => $this->encryption->decrypt($account->encrypted_password),
+                ];
+            } catch (\Throwable $e) {
+                $accountsWithPass[] = [
+                    'account'  => $account,
+                    'password' => null,
+                    'error'    => $e->getMessage(),
+                ];
+            }
         }
 
         $syncService = $this->syncService;
 
-        return response()->stream(function () use ($account, $password, $syncService) {
-            foreach ($syncService->syncAccountStreaming($account, $password) as $progress) {
-                echo "data: " . json_encode($progress) . "\n\n";
-                if (ob_get_level() > 0) ob_flush();
-                flush();
+        return response()->stream(function () use ($accountsWithPass, $syncService, $emit) {
+            $totalAccounts = count($accountsWithPass);
+
+            foreach ($accountsWithPass as $i => $item) {
+                $account = $item['account'];
+
+                if ($totalAccounts > 1) {
+                    $emit(['status' => 'account_start', 'message' => "Sincronizando cuenta " . ($i + 1) . "/{$totalAccounts}: {$account->email_address}"]);
+                }
+
+                if (isset($item['error'])) {
+                    $emit(['status' => 'error', 'error' => "No se pudo desencriptar la contraseña de {$account->email_address}: {$item['error']}"]);
+                    continue;
+                }
+
+                foreach ($syncService->syncAccountStreaming($account, $item['password']) as $progress) {
+                    $emit($progress);
+                    if (($progress['status'] ?? '') === 'error' && $totalAccounts > 1) {
+                        break;
+                    }
+                }
             }
-        }, 200, [
-            'Content-Type'     => 'text/event-stream',
-            'Cache-Control'    => 'no-cache',
-            'X-Accel-Buffering' => 'no',
-        ]);
+
+            if ($totalAccounts > 1) {
+                $emit(['status' => 'success', 'message' => "Todas las cuentas sincronizadas."]);
+            }
+        }, 200, $sse);
     }
 
     /**

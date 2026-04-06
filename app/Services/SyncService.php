@@ -14,6 +14,8 @@ use Carbon\Carbon;
 class SyncService
 {
     private const SYNC_MIN_DATE = '2026-03-31 00:00:00';
+    /** Máximo de emails a descargar por sincronización (evita timeouts en proxies) */
+    private const BATCH_SIZE    = 50;
 
     public function __construct(
         private ClassificationService $classificationService,
@@ -601,17 +603,28 @@ class SyncService
                 ->whereNotNull('imap_uid')
                 ->max('imap_uid');
 
-            $newUids = $imap->getNewMessageUids($lastUid);
-            $total   = count($newUids);
-            $current = 0;
+            $newUids     = $imap->getNewMessageUids($lastUid);
+            $pendingUids = array_slice($newUids, 0, self::BATCH_SIZE);
+            $remaining   = count($newUids) - count($pendingUids);
+            $total       = count($pendingUids);
+            $current     = 0;
 
-            yield ['status' => 'downloading', 'current' => 0, 'total' => $total, 'message' => "Descargando {$total} mensajes nuevos..."];
+            $suffix = $remaining > 0 ? " ({$remaining} más en la próxima sync)" : '';
+            yield ['status' => 'downloading', 'current' => 0, 'total' => $total, 'message' => "Descargando {$total} mensajes nuevos{$suffix}..."];
+
+            // Pre-cargar message_ids existentes — evita N+1 dentro del bucle
+            $existingMessageIds = Message::where('account_id', $account->id)
+                ->whereNotNull('message_id')
+                ->where('message_id', '!=', '')
+                ->pluck('message_id')
+                ->flip()
+                ->all();
 
             $newMessages   = 0;
             $newMessageIds = [];
             $toClassify    = [];
 
-            foreach ($newUids as $uid) {
+            foreach ($pendingUids as $uid) {
                 $current++;
                 yield ['status' => 'downloading', 'current' => $current, 'total' => $total];
 
@@ -623,11 +636,9 @@ class SyncService
                         continue;
                     }
 
-                    if ($headers['message_id']) {
-                        $exists = Message::where('message_id', $headers['message_id'])
-                            ->where('account_id', $account->id)
-                            ->exists();
-                        if ($exists) continue;
+                    // Verificar duplicado en O(1) sin query extra
+                    if ($headers['message_id'] && isset($existingMessageIds[$headers['message_id']])) {
+                        continue;
                     }
 
                     $bodyData = $imap->fetchFullMessageBody($uid);
@@ -659,6 +670,11 @@ class SyncService
 
                     if (!empty($bodyData['attachments'])) {
                         $this->saveAttachments($bodyData['attachments'], $message);
+                    }
+
+                    // Actualizar mapa en memoria para evitar duplicados dentro del lote
+                    if ($headers['message_id']) {
+                        $existingMessageIds[$headers['message_id']] = 1;
                     }
 
                     $newMessageIds[] = $messageId;
