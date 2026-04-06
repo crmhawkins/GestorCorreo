@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Account;
 use App\Models\User;
+use App\Services\EncryptionService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Hash;
@@ -64,8 +66,10 @@ class UserController extends Controller
             $user->username = $validated['username'];
         }
 
+        $passwordChanged = false;
         if (isset($validated['password'])) {
             $user->password_hash = bcrypt($validated['password']);
+            $passwordChanged = true;
         }
 
         if (isset($validated['is_active'])) {
@@ -85,6 +89,17 @@ class UserController extends Controller
         }
 
         $user->save();
+
+        // Si cambió la contraseña, sincronizar encrypted_password en sus cuentas de correo
+        if ($passwordChanged) {
+            $encryption = app(EncryptionService::class);
+            Account::where('user_id', $user->id)
+                ->where('is_deleted', false)
+                ->each(function (Account $account) use ($validated, $encryption) {
+                    $account->encrypted_password = $encryption->encrypt($validated['password']);
+                    $account->save();
+                });
+        }
 
         return response()->json([
             'message' => 'Usuario actualizado correctamente.',
@@ -144,6 +159,16 @@ class UserController extends Controller
         if (!$user) return response()->json(['error' => 'Usuario no encontrado.'], 404);
         $user->password_hash = bcrypt($validated['password']);
         $user->save();
+
+        // Sincronizar contraseña de correo en todas las cuentas del usuario
+        $encryption = app(EncryptionService::class);
+        Account::where('user_id', $user->id)
+            ->where('is_deleted', false)
+            ->each(function (Account $account) use ($validated, $encryption) {
+                $account->encrypted_password = $encryption->encrypt($validated['password']);
+                $account->save();
+            });
+
         return response()->json(['message' => 'Contraseña actualizada.']);
     }
 }

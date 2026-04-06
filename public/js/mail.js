@@ -871,18 +871,11 @@ function openAccountModal(acc = null) {
     document.getElementById('acc-email').title = 'Se usa automáticamente el email del registro en la plataforma';
     const pwd = document.getElementById('acc-password');
     const pwdHint = document.getElementById('acc-password-hint');
-    pwd.readOnly = false;
-    pwd.disabled = false;
-    if (acc) {
-        pwd.value = '';
-        pwd.placeholder = 'Dejar vacío para no cambiar';
-        if (pwdHint) pwdHint.textContent = 'Solo rellena si la contraseña de IONOS ha cambiado.';
-    } else {
-        const tempPlatformPassword = sessionStorage.getItem('platform_password_temp') || '';
-        pwd.value = tempPlatformPassword;
-        pwd.placeholder = 'Contraseña de acceso al correo (IONOS)';
-        if (pwdHint) pwdHint.textContent = '';
-    }
+    pwd.value = '';
+    pwd.readOnly = true;
+    pwd.disabled = true;
+    pwd.placeholder = 'Se gestiona automáticamente';
+    if (pwdHint) pwdHint.textContent = '';
     document.getElementById('acc-imap-host').value = acc?.imap_host || 'pop.ionos.es';
     document.getElementById('acc-imap-port').value = acc?.imap_port || 995;
     document.getElementById('acc-imap-ssl').value = acc?.imap_ssl ? '1' : '0';
@@ -902,7 +895,7 @@ async function saveAccount() {
     const emailStr = (S.user?.username || document.getElementById('acc-email').value || '').trim();
     const imapHost = document.getElementById('acc-imap-host').value.trim();
     const imapPort = parseInt(document.getElementById('acc-imap-port').value);
-    const emailPassword = document.getElementById('acc-password').value;
+    const tempPlatformPassword = sessionStorage.getItem('platform_password_temp') || '';
     const inferredProtocol = (imapHost.toLowerCase().startsWith('pop.') || [110, 965, 995].includes(imapPort)) ? 'pop3' : 'imap';
     const body = {
         name: document.getElementById('acc-name').value.trim(),
@@ -918,11 +911,10 @@ async function saveAccount() {
         custom_classification_prompt: document.getElementById('acc-custom-classification-prompt').value.trim(),
         signature_html: document.getElementById('acc-signature-html').value,
     };
-    // Incluir contraseña solo si se ha introducido; al editar, vacío = no cambiar
-    if (emailPassword.trim()) {
-        body.password = emailPassword;
+    if (!S.editingAccountId && tempPlatformPassword) {
+        body.password = tempPlatformPassword;
     } else if (!S.editingAccountId) {
-        toast('La contraseña de correo es obligatoria al crear una cuenta.', 'error');
+        toast('Para la primera configuración debes iniciar sesión de nuevo.', 'error');
         return;
     }
     if (!body.email_address) { toast('El email es obligatorio', 'error'); return; }

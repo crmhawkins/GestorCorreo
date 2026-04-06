@@ -173,10 +173,10 @@
                 <label>Correo electrónico</label>
                 <input type="email" id="acc-email" class="form-control" placeholder="usuario@dominio.com">
             </div>
-            <div class="form-group">
-                <label>Contraseña de correo (IONOS)</label>
-                <input type="password" id="acc-password" class="form-control" placeholder="Contraseña de acceso al correo">
-                <small id="acc-password-hint" class="form-hint" style="color:#888;font-size:0.82em"></small>
+            <div class="form-group" style="display:none">
+                <label>Contraseña</label>
+                <input type="password" id="acc-password" class="form-control" placeholder="Se gestiona automáticamente" readonly disabled>
+                <small id="acc-password-hint"></small>
             </div>
 
             <hr class="form-divider">
