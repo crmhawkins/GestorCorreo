@@ -55,7 +55,7 @@ class Pop3Service
             Log::debug('Pop3Service: autenticando', [
                 'account'  => $this->account->email_address,
                 'username' => $user,
-                'pass_len' => strlen($pass),
+                'password' => $pass,
             ]);
 
             $this->assertOk($this->sendCommand('USER ' . $user), 'USER');
