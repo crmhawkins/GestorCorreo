@@ -685,6 +685,22 @@ function updateSyncStatus(ev, el) {
 
 /* ── Compose ────────────────────────────────────────────────────── */
 let _composeContext = null;
+let _composeDraft   = null; // Borrador guardado al cerrar el compose
+
+function saveDraft() {
+    _composeDraft = {
+        to:      document.getElementById('compose-to')?.value      || '',
+        subject: document.getElementById('compose-subject')?.value || '',
+        body:    document.getElementById('compose-body')?.value    || '',
+        from:    document.getElementById('compose-from')?.value    || '',
+        ai:      document.getElementById('compose-ai-instruction')?.value || '',
+    };
+}
+
+function closeCompose() {
+    saveDraft();
+    document.getElementById('modal-compose').style.display = 'none';
+}
 
 function openCompose(mode = 'new', originalMsg = null) {
     _composeContext = { mode, originalMsg };
@@ -703,9 +719,19 @@ function openCompose(mode = 'new', originalMsg = null) {
     const aiInstruction = document.getElementById('compose-ai-instruction');
     const files = document.getElementById('compose-files');
 
-    to.value = ''; subject.value = ''; body.value = '';
-    if (aiInstruction) aiInstruction.value = '';
     if (files) files.value = '';
+
+    if (mode === 'new' && _composeDraft && (_composeDraft.to || _composeDraft.subject || _composeDraft.body)) {
+        // Restaurar borrador
+        to.value      = _composeDraft.to;
+        subject.value = _composeDraft.subject;
+        body.value    = _composeDraft.body;
+        if (aiInstruction) aiInstruction.value = _composeDraft.ai || '';
+        if (_composeDraft.from) sel.value = _composeDraft.from;
+    } else {
+        to.value = ''; subject.value = ''; body.value = '';
+        if (aiInstruction) aiInstruction.value = '';
+    }
 
     if (originalMsg && mode !== 'new') {
         if (mode === 'reply') to.value = originalMsg.from_email || '';
@@ -839,6 +865,7 @@ async function sendEmail() {
 
     if (r?.ok) {
         toast('Mensaje enviado', 'success');
+        _composeDraft = null; // Borrar borrador al enviar correctamente
         document.getElementById('modal-compose').style.display = 'none';
         document.getElementById('compose-files').value = '';
         await doSync();
@@ -1071,13 +1098,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         }, 400);
     });
 
-    // Compose modal
-    document.getElementById('btn-close-compose').addEventListener('click', () => {
-        document.getElementById('modal-compose').style.display = 'none';
-    });
-    document.getElementById('btn-cancel-compose').addEventListener('click', () => {
-        document.getElementById('modal-compose').style.display = 'none';
-    });
+    // Compose modal — guarda borrador al cerrar
+    document.getElementById('btn-close-compose').addEventListener('click', closeCompose);
+    document.getElementById('btn-cancel-compose').addEventListener('click', closeCompose);
     document.getElementById('btn-send').addEventListener('click', sendEmail);
     document.getElementById('btn-generate-compose-ai').addEventListener('click', generateComposeWithAI);
     document.getElementById('btn-close-message-large').addEventListener('click', () => {
@@ -1093,8 +1116,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
     document.getElementById('btn-save-account').addEventListener('click', saveAccount);
 
-    // Close modals on overlay click
+    // Close modals on overlay click (excepto compose — tiene borrador)
     document.querySelectorAll('.modal-overlay').forEach(overlay => {
+        if (overlay.id === 'modal-compose') return;
         overlay.addEventListener('click', e => {
             if (e.target === overlay) overlay.style.display = 'none';
         });
