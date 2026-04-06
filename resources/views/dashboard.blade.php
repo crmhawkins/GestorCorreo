@@ -71,7 +71,7 @@
 
         <div class="toolbar">
             <div class="toolbar-left">
-                <input type="text" id="search-input" class="search-input" placeholder="Buscar mensajes…" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+                <input type="search" id="search-input" class="search-input" placeholder="Buscar mensajes…" autocomplete="new-password" autocorrect="off" autocapitalize="off" spellcheck="false" role="searchbox">
                 <div class="form-row" style="margin-top:.4rem; gap:.4rem; align-items:center;">
                     <input type="date" id="filter-date-from" class="form-control" style="max-width:160px">
                     <input type="date" id="filter-date-to" class="form-control" style="max-width:160px">
