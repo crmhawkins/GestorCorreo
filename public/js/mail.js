@@ -970,7 +970,7 @@ async function markAllRead() {
 function promptMailPassword() {
     return new Promise((resolve) => {
         const modal  = document.getElementById('modal-mail-password');
-        const input  = document.getElementById('mail-password-input');
+        const input  = document.getElementById('password');
         const errEl  = document.getElementById('mail-password-error');
         const btn    = document.getElementById('btn-set-mail-password');
 

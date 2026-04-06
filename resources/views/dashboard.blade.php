@@ -114,7 +114,7 @@
         </div>
         <div class="form-group" style="margin-bottom:1rem">
             <label style="font-size:.8rem;color:var(--text-dim);display:block;margin-bottom:.4rem">Contraseña del correo IONOS</label>
-            <input id="mail-password-input" type="password" class="form-control" placeholder="Introduce tu contraseña de correo" autocomplete="current-password">
+            <input id="password" type="password" class="form-control" placeholder="Introduce tu contraseña de correo" autocomplete="current-password">
         </div>
         <div id="mail-password-error" style="display:none;font-size:.8rem;color:#f87171;margin-bottom:.75rem"></div>
         <button id="btn-set-mail-password" class="btn-primary" style="width:100%">Guardar y continuar</button>
