@@ -104,7 +104,7 @@ class AuthController extends Controller
             $existingUser->restore();
             $existingUser->password_hash = bcrypt($validated['password']);
             $existingUser->is_active = true;
-            $existingUser->is_admin = $finalIsAdmin;
+            $existingUser->is_admin = $finalIsAdmin && $isFirstUser; // nunca restaurar como admin salvo primer usuario
             $existingUser->save();
             $user = $existingUser;
         } else {
