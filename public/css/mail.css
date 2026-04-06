@@ -421,6 +421,30 @@ select.form-control option { background: var(--surface); }
 }
 .compose-textarea { min-height: 220px; resize: vertical; }
 
+/* ── Quill editor theme integration ────────────────────────────── */
+#compose-editor .ql-editor { min-height: 180px; font-size: .875rem; color: var(--text); }
+.ql-toolbar.ql-snow {
+    border: 1px solid var(--border) !important;
+    border-bottom: none !important;
+    border-radius: var(--radius) var(--radius) 0 0 !important;
+    background: var(--sidebar-bg);
+    padding: .35rem .5rem !important;
+}
+.ql-container.ql-snow {
+    border: 1px solid var(--border) !important;
+    border-radius: 0 0 var(--radius) var(--radius) !important;
+    background: var(--surface);
+    font-family: inherit;
+}
+.ql-snow .ql-stroke { stroke: var(--text-dim) !important; }
+.ql-snow .ql-fill  { fill:   var(--text-dim) !important; }
+.ql-snow .ql-picker-label { color: var(--text-dim) !important; }
+.ql-snow.ql-toolbar button:hover .ql-stroke,
+.ql-snow.ql-toolbar button.ql-active .ql-stroke { stroke: var(--accent) !important; }
+.ql-snow.ql-toolbar button:hover .ql-fill,
+.ql-snow.ql-toolbar button.ql-active .ql-fill  { fill:   var(--accent) !important; }
+.ql-snow .ql-editor.ql-blank::before { color: var(--text-dim); font-style: normal; }
+
 /* ── Buttons ──────────────────────────────────────────────────── */
 .btn-primary {
     padding: .5rem 1.1rem; border-radius: var(--radius); border: none;

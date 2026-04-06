@@ -686,12 +686,13 @@ function updateSyncStatus(ev, el) {
 /* ── Compose ────────────────────────────────────────────────────── */
 let _composeContext = null;
 let _composeDraft   = null; // Borrador guardado al cerrar el compose
+let _quill          = null; // Instancia de Quill
 
 function saveDraft() {
     _composeDraft = {
         to:      document.getElementById('compose-to')?.value      || '',
         subject: document.getElementById('compose-subject')?.value || '',
-        body:    document.getElementById('compose-body')?.value    || '',
+        body:    _quill ? _quill.root.innerHTML : '',
         from:    document.getElementById('compose-from')?.value    || '',
         ai:      document.getElementById('compose-ai-instruction')?.value || '',
     };
@@ -713,23 +714,25 @@ function openCompose(mode = 'new', originalMsg = null) {
     if (S.selectedAccount) sel.value = S.selectedAccount;
 
     // Pre-fill fields
-    const to = document.getElementById('compose-to');
-    const subject = document.getElementById('compose-subject');
-    const body = document.getElementById('compose-body');
+    const to          = document.getElementById('compose-to');
+    const subject     = document.getElementById('compose-subject');
     const aiInstruction = document.getElementById('compose-ai-instruction');
-    const files = document.getElementById('compose-files');
+    const files       = document.getElementById('compose-files');
 
     if (files) files.value = '';
+
+    const setBody = (html) => { if (_quill) { _quill.root.innerHTML = html || ''; } };
 
     if (mode === 'new' && _composeDraft && (_composeDraft.to || _composeDraft.subject || _composeDraft.body)) {
         // Restaurar borrador
         to.value      = _composeDraft.to;
         subject.value = _composeDraft.subject;
-        body.value    = _composeDraft.body;
+        setBody(_composeDraft.body);
         if (aiInstruction) aiInstruction.value = _composeDraft.ai || '';
         if (_composeDraft.from) sel.value = _composeDraft.from;
     } else {
-        to.value = ''; subject.value = ''; body.value = '';
+        to.value = ''; subject.value = '';
+        setBody('');
         if (aiInstruction) aiInstruction.value = '';
     }
 
@@ -739,9 +742,10 @@ function openCompose(mode = 'new', originalMsg = null) {
         if (mode === 'forward') to.value = '';
         const cleanOriginal = normalizeBodyTextForReply(originalMsg.body_text, originalMsg.body_html);
         subject.value = (mode === 'forward' ? 'Fwd: ' : 'Re: ') + (originalMsg.subject || '');
-        body.value = mode === 'forward'
-            ? `\n\n-------- Mensaje reenviado --------\nDe: ${originalMsg.from_email}\nFecha: ${new Date(originalMsg.date).toLocaleString('es-ES')}\nAsunto: ${originalMsg.subject}\n\n${cleanOriginal}`
-            : `\n\n> ${cleanOriginal.split('\n').join('\n> ')}`;
+        const quoteHtml = mode === 'forward'
+            ? `<p><br></p><hr><p><strong>Mensaje reenviado</strong><br>De: ${originalMsg.from_email}<br>Fecha: ${new Date(originalMsg.date).toLocaleString('es-ES')}<br>Asunto: ${originalMsg.subject}</p><p>${cleanOriginal.replace(/\n/g, '<br>')}</p>`
+            : `<p><br></p><blockquote>${cleanOriginal.replace(/\n/g, '<br>')}</blockquote>`;
+        setBody(quoteHtml);
     }
 
     document.getElementById('modal-compose').style.display = 'flex';
@@ -779,7 +783,7 @@ async function generateComposeWithAI() {
     btn.textContent = 'Generar con IA';
 
     if (r?.ok && r.data?.reply_body) {
-        document.getElementById('compose-body').value = r.data.reply_body;
+        if (_quill) _quill.root.innerHTML = (r.data.reply_body || '').replace(/\n/g, '<br>');
         toast('Borrador generado con IA', 'success');
     } else {
         toast(r?.data?.error || 'No se pudo generar el borrador', 'error');
@@ -840,7 +844,8 @@ async function sendEmail() {
     const to = document.getElementById('compose-to').value.trim();
     const cc = document.getElementById('compose-cc').value.trim();
     const subject = document.getElementById('compose-subject').value.trim();
-    const body = document.getElementById('compose-body').value;
+    const body     = _quill ? _quill.getText().trim() : '';
+    const bodyHtml = _quill ? _quill.root.innerHTML : '';
     const files = Array.from(document.getElementById('compose-files').files || []);
 
     if (!to || !subject) { toast('Destinatario y asunto obligatorios', 'error'); return; }
@@ -848,7 +853,7 @@ async function sendEmail() {
     const btn = document.getElementById('btn-send');
     btn.disabled = true; btn.textContent = 'Enviando…';
 
-    const payload = { account_id: accountId, to, subject, body_text: body };
+    const payload = { account_id: accountId, to, subject, body_text: body, body_html: bodyHtml };
     payload.compose_mode = _composeContext?.mode || 'new';
     if (cc) payload.cc = cc;
     if (_composeContext?.originalMsg?.id) payload.reply_to_message_id = _composeContext.originalMsg.id;
@@ -1032,6 +1037,22 @@ function promptMailPassword() {
 
 document.addEventListener('DOMContentLoaded', async () => {
     applyUiFontSize(localStorage.getItem('ui_font_size') || '13');
+
+    // Inicializar Quill editor
+    if (typeof Quill !== 'undefined' && document.getElementById('compose-editor')) {
+        _quill = new Quill('#compose-editor', {
+            theme: 'snow',
+            placeholder: 'Escribe tu mensaje…',
+            modules: {
+                toolbar: [
+                    ['bold', 'italic', 'underline'],
+                    [{ list: 'ordered' }, { list: 'bullet' }],
+                    [{ align: [] }],
+                    ['clean'],
+                ],
+            },
+        });
+    }
     renderUser();
 
     // Auth check

@@ -147,7 +147,7 @@
             </div>
             <div class="form-group">
                 <label>Mensaje</label>
-                <textarea id="compose-body" class="form-control compose-textarea" placeholder="Escribe tu mensaje…"></textarea>
+                <div id="compose-editor" style="min-height:180px;border-radius:var(--radius);background:var(--input-bg,var(--surface))"></div>
             </div>
             <div class="form-group">
                 <label>Instrucción para IA (tu estilo)</label>
