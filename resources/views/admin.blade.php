@@ -611,12 +611,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
     }
 
-    if (!me.data?.is_admin) {
+    const userData = me.data?.user ?? me.data;
+
+    if (!userData?.is_admin) {
         window.location.href = '/';
         return;
     }
 
-    showAdminPanel(me.data);
+    showAdminPanel(userData);
 });
 
 document.getElementById('btn-logout').addEventListener('click', () => {
