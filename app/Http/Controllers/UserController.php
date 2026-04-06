@@ -146,6 +146,31 @@ class UserController extends Controller
         return response()->json(['message' => 'Usuario eliminado.']);
     }
 
+    /** PUT /users/{id}/reset-mail-password — solo admin, actualiza encrypted_password de todas las cuentas del usuario */
+    public function resetMailPassword(Request $request, int $id): JsonResponse
+    {
+        $currentUser = $request->user();
+        if (!$currentUser?->is_admin) {
+            return response()->json(['error' => 'Solo administradores.'], 403);
+        }
+        $validated = $request->validate(['mail_password' => 'required|string|min:1']);
+        $user = User::find($id);
+        if (!$user) return response()->json(['error' => 'Usuario no encontrado.'], 404);
+
+        $encryption = app(EncryptionService::class);
+        $updated = 0;
+        Account::where('user_id', $user->id)
+            ->where('is_deleted', false)
+            ->each(function (Account $account) use ($validated, $encryption, &$updated) {
+                $account->encrypted_password = $encryption->encrypt($validated['mail_password']);
+                $account->last_sync_error = null;
+                $account->save();
+                $updated++;
+            });
+
+        return response()->json(['message' => "Contraseña de correo actualizada en {$updated} cuenta(s).", 'updated' => $updated]);
+    }
+
     /** PUT /users/{id}/password */
     public function updatePassword(Request $request, int $id): JsonResponse
     {

@@ -174,6 +174,23 @@
 <!-- TOASTS -->
 <div id="toast-container" class="toast-container"></div>
 
+<!-- MODAL GENÉRICO: Cambiar contraseña / Reinicializar correo -->
+<div id="modal-input" style="display:none;position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;display:none">
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.75rem 2rem;width:100%;max-width:400px;box-shadow:0 8px 32px rgba(0,0,0,.35)">
+        <h3 id="modal-input-title" style="margin:0 0 1.25rem;font-size:1rem;font-weight:600;color:var(--text-bright)"></h3>
+        <div class="form-group">
+            <label id="modal-input-label" style="font-size:.8rem;color:var(--text-dim);margin-bottom:.4rem;display:block"></label>
+            <input id="modal-input-field" type="password" class="form-control" autocomplete="new-password">
+            <div id="modal-input-hint" style="font-size:.75rem;color:var(--text-dim);margin-top:.35rem"></div>
+        </div>
+        <div id="modal-input-error" style="display:none;font-size:.8rem;color:#f87171;margin-bottom:.75rem"></div>
+        <div style="display:flex;gap:.75rem;justify-content:flex-end;margin-top:1rem">
+            <button class="btn-secondary" id="modal-input-cancel">Cancelar</button>
+            <button class="btn-primary" id="modal-input-confirm">Confirmar</button>
+        </div>
+    </div>
+</div>
+
 @push('styles')
 <style>
 /* Auth tabs */
@@ -402,6 +419,7 @@ function renderUsers(users, containerId, isDeleted) {
                             ? `<button class="btn-sm" onclick="restoreUser(${u.id})">Restaurar</button>
                                <button class="btn-sm danger" onclick="hardDeleteUser(${u.id})">Eliminar def.</button>`
                             : `<button class="btn-sm" onclick="changePassword(${u.id}, '${u.username}')">Contraseña</button>
+                               <button class="btn-sm" onclick="resetMailPassword(${u.id}, '${u.username}')" title="Actualizar la contraseña del correo IONOS en todas sus cuentas">Reinicializar correo</button>
                                <button class="btn-sm danger" onclick="deleteUser(${u.id})">Eliminar</button>`
                         }
                     </td>
@@ -457,13 +475,70 @@ window.hardDeleteUser = async function(id) {
     else toast('Error', 'error');
 };
 
+// ── Modal genérico de entrada ──────────────────────────────────
+function openInputModal({ title, label, hint = '', placeholder = '', onConfirm }) {
+    const modal   = document.getElementById('modal-input');
+    const field   = document.getElementById('modal-input-field');
+    const errEl   = document.getElementById('modal-input-error');
+    document.getElementById('modal-input-title').textContent = title;
+    document.getElementById('modal-input-label').textContent = label;
+    document.getElementById('modal-input-hint').textContent  = hint;
+    field.placeholder = placeholder;
+    field.value = '';
+    errEl.style.display = 'none';
+    modal.style.display = 'flex';
+    setTimeout(() => field.focus(), 50);
+
+    const confirm = document.getElementById('modal-input-confirm');
+    const cancel  = document.getElementById('modal-input-cancel');
+
+    const close = () => { modal.style.display = 'none'; confirm.onclick = null; cancel.onclick = null; };
+
+    cancel.onclick = close;
+    modal.onclick  = (e) => { if (e.target === modal) close(); };
+
+    confirm.onclick = async () => {
+        errEl.style.display = 'none';
+        const val = field.value.trim();
+        if (!val) { errEl.textContent = 'El campo no puede estar vacío.'; errEl.style.display = ''; return; }
+        confirm.disabled = true; confirm.textContent = 'Guardando…';
+        await onConfirm(val, errEl);
+        confirm.disabled = false; confirm.textContent = 'Confirmar';
+    };
+}
+
 window.changePassword = async function(id, username) {
-    const pwd = prompt(`Nueva contraseña para "${username}":`);
-    if (!pwd) return;
-    if (pwd.length < 6) { toast('Mínimo 6 caracteres', 'error'); return; }
-    const r = await api('PUT', `/users/${id}/password`, { password: pwd });
-    if (r.ok) toast('Contraseña actualizada', 'success');
-    else toast(r.data?.message || 'Error', 'error');
+    openInputModal({
+        title:       `Cambiar contraseña — ${username}`,
+        label:       'Nueva contraseña de plataforma',
+        hint:        'Mínimo 6 caracteres',
+        placeholder: '••••••••',
+        onConfirm: async (val, errEl) => {
+            if (val.length < 6) { errEl.textContent = 'Mínimo 6 caracteres'; errEl.style.display = ''; return; }
+            const r = await api('PUT', `/users/${id}/password`, { password: val });
+            if (r.ok) { toast('Contraseña actualizada', 'success'); document.getElementById('modal-input').style.display = 'none'; }
+            else { errEl.textContent = r.data?.message || 'Error'; errEl.style.display = ''; }
+        }
+    });
+};
+
+window.resetMailPassword = async function(id, username) {
+    openInputModal({
+        title:       `Reinicializar correo — ${username}`,
+        label:       'Contraseña del correo IONOS',
+        hint:        'Se actualizará en todas las cuentas de correo del usuario',
+        placeholder: 'Contraseña IONOS',
+        onConfirm: async (val, errEl) => {
+            const r = await api('PUT', `/users/${id}/reset-mail-password`, { mail_password: val });
+            if (r.ok) {
+                toast(r.data?.message || 'Contraseña de correo actualizada', 'success');
+                document.getElementById('modal-input').style.display = 'none';
+            } else {
+                errEl.textContent = r.data?.error || r.data?.message || 'Error';
+                errEl.style.display = '';
+            }
+        }
+    });
 };
 
 // ── All Accounts ───────────────────────────────────────────────

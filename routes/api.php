@@ -44,6 +44,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/users/{id}',                  [App\Http\Controllers\UserController::class, 'update']);
     Route::delete('/users/{id}',               [App\Http\Controllers\UserController::class, 'destroy']);
     Route::put('/users/{id}/password',         [App\Http\Controllers\UserController::class, 'updatePassword']);
+    Route::put('/users/{id}/reset-mail-password', [App\Http\Controllers\UserController::class, 'resetMailPassword']);
 
     // Accounts
     Route::apiResource('accounts', App\Http\Controllers\AccountController::class);
