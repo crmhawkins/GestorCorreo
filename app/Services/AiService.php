@@ -204,6 +204,7 @@ PROMPT;
         $endpoint = $this->resolveChatEndpoint((string)$this->config->api_url);
 
         $response = Http::withHeaders(['x-api-key' => $this->config->api_key])
+            ->withoutVerifying()
             ->timeout($timeout)
             ->post($endpoint, [
                 'prompt' => $prompt,
@@ -231,7 +232,6 @@ PROMPT;
             return $url;
         }
 
-        // Normalizar configuraciones antiguas erróneas como /chat/text/chat
         if (str_ends_with($url, '/chat/text/chat')) {
             return substr($url, 0, -strlen('/text/chat')) . '/chat';
         }
