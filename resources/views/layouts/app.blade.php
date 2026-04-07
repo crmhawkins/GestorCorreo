@@ -6,6 +6,7 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>@yield('title', 'Hawkins Mail')</title>
     <link rel="stylesheet" href="/css/mail.css">
+    <link rel="stylesheet" href="https://cdn.quilljs.com/1.3.7/quill.snow.css">
     <script>
         const theme = localStorage.getItem('theme') || 'dark';
         document.documentElement.setAttribute('data-theme', theme);
@@ -36,6 +37,7 @@
         
         updateThemeIcon();
     </script>
+    <script src="https://cdn.quilljs.com/1.3.7/quill.min.js"></script>
     @stack('scripts')
 </body>
 </html>
