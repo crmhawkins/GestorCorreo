@@ -167,7 +167,7 @@
 </div>
 
 <div class="modal-overlay" id="modal-message-large" style="display:none">
-    <div class="modal-box" style="max-width:980px;width:96vw;">
+    <div class="modal-box" style="max-width:1370px;width:96vw;">
         <div class="modal-header">
             <h3>Mensaje</h3>
             <button class="btn-icon" id="btn-close-message-large">&#10005;</button>
