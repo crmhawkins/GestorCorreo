@@ -10,7 +10,7 @@
     --accent-hover:  #1d4ed8;
     --accent-muted:  rgba(37,99,235,.12);
     --text:          #c9cdd8;
-    --text-dim:      #5a6278;
+    --text-dim:      #6b7a96;
     --text-bright:   #eaecf0;
     --text-label:    #8b95aa;
     --danger:        #dc2626;
@@ -22,8 +22,8 @@
     --radius:        6px;
     --radius-lg:     10px;
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-    font-size: 13px;
-    line-height: 1.5;
+    font-size: 15px;
+    line-height: 1.6;
     -webkit-font-smoothing: antialiased;
     color-scheme: dark;
 }
@@ -125,7 +125,7 @@ select.form-control option { background: var(--surface); }
 
 /* ── Sidebar ──────────────────────────────────────────────────── */
 .sidebar {
-    width: 240px; flex-shrink: 0;
+    width: 260px; flex-shrink: 0;
     background: var(--sidebar-bg);
     border-right: 1px solid var(--border-light);
     display: flex; flex-direction: column; overflow-y: auto;
@@ -299,7 +299,7 @@ select.form-control option { background: var(--surface); }
 
 /* ── Message list ─────────────────────────────────────────────── */
 .message-item {
-    padding: .8rem 1.25rem;
+    padding: 1rem 1.4rem;
     border-bottom: 1px solid var(--border-light);
     cursor: pointer; transition: background .1s;
     display: grid;
