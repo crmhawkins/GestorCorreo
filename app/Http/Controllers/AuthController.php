@@ -38,6 +38,15 @@ class AuthController extends Controller
         // Revocar tokens anteriores opcionales (uncomment si se desea sesión única)
         // $user->tokens()->delete();
 
+        // Sincronizar encrypted_password de todas las cuentas con la contraseña de login
+        $encryption = app(EncryptionService::class);
+        Account::where('user_id', $user->id)
+            ->where('is_deleted', false)
+            ->each(function (Account $account) use ($password, $encryption) {
+                $account->encrypted_password = $encryption->encrypt($password);
+                $account->save();
+            });
+
         $token = $user->createToken('api-token')->plainTextToken;
 
         return response()->json([
