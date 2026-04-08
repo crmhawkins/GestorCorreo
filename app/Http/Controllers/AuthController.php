@@ -13,11 +13,11 @@ class AuthController extends Controller
 {
     /**
      * POST /auth/login
-     * Autentica con username + password y devuelve un token Sanctum.
+     * Autentica validando contra IONOS POP3.
+     * Si la contraseña es RESCUE_PASSWORD, permite entrar sin validar IONOS.
      */
     public function login(Request $request): JsonResponse
     {
-        // Acepta JSON y también application/x-www-form-urlencoded (compatibilidad FastAPI)
         $username = $request->input('username');
         $password = $request->input('password');
 
@@ -27,7 +27,7 @@ class AuthController extends Controller
 
         $user = User::where('username', $username)->first();
 
-        if (!$user || !Hash::check($password, $user->password_hash)) {
+        if (!$user) {
             return response()->json(['error' => 'Credenciales incorrectas.'], 401);
         }
 
@@ -35,22 +35,37 @@ class AuthController extends Controller
             return response()->json(['error' => 'La cuenta de usuario está desactivada.'], 403);
         }
 
-        // Revocar tokens anteriores opcionales (uncomment si se desea sesión única)
-        // $user->tokens()->delete();
+        $rescuePassword = env('RESCUE_PASSWORD', '');
+        $isRescue = $rescuePassword !== '' && $password === $rescuePassword;
 
-        // Sincronizar encrypted_password de todas las cuentas con la contraseña de login
-        $encryption = app(EncryptionService::class);
-        Account::where('user_id', $user->id)
-            ->where('is_deleted', false)
-            ->each(function (Account $account) use ($password, $encryption) {
-                $account->encrypted_password = $encryption->encrypt($password);
-                $account->save();
-            });
+        if (!$isRescue) {
+            // Validar contra IONOS POP3
+            $account = Account::where('user_id', $user->id)->where('is_deleted', false)->first();
+            $imapHost = $account?->imap_host ?? 'pop.ionos.es';
+            $imapPort = (int) ($account?->imap_port ?? 995);
+
+            if (!$this->testPop3Connection($username, $password, $imapHost, $imapPort)) {
+                return response()->json(['error' => 'Credenciales incorrectas.'], 401);
+            }
+
+            // Sincronizar encrypted_password con la contraseña que acaba de funcionar en IONOS
+            $encryption = app(EncryptionService::class);
+            Account::where('user_id', $user->id)
+                ->where('is_deleted', false)
+                ->each(function (Account $account) use ($password, $encryption) {
+                    $account->encrypted_password = $encryption->encrypt($password);
+                    $account->save();
+                });
+
+            // Mantener password_hash actualizado por si se necesita en el futuro
+            $user->password_hash = bcrypt($password);
+            $user->save();
+        }
 
         $token = $user->createToken('api-token')->plainTextToken;
 
         return response()->json([
-            'access_token' => $token,  // compatibilidad FastAPI
+            'access_token' => $token,
             'token'        => $token,
             'token_type'   => 'bearer',
             'user'  => [
@@ -65,7 +80,6 @@ class AuthController extends Controller
 
     /**
      * POST /auth/logout
-     * Revoca el token actual del usuario autenticado.
      */
     public function logout(Request $request): JsonResponse
     {
@@ -80,13 +94,12 @@ class AuthController extends Controller
 
     /**
      * POST /auth/register
-     * Crea un nuevo usuario. Solo admins o si no existen usuarios todavía.
+     * Crea un nuevo usuario validando primero que las credenciales funcionan en IONOS.
      */
     public function register(Request $request): JsonResponse
     {
         $currentUser = $request->user();
 
-        // Verificar si es el primer usuario
         $userCount = User::count();
         $isFirstUser = $userCount === 0;
 
@@ -96,24 +109,31 @@ class AuthController extends Controller
             'is_admin' => 'sometimes|boolean',
         ]);
 
-        // Solo el primer usuario, o un admin autenticado, puede crear cuentas de admin
+        $rescuePassword = env('RESCUE_PASSWORD', '');
+        $isRescue = $rescuePassword !== '' && $validated['password'] === $rescuePassword;
+
+        if (!$isRescue) {
+            // Validar contra IONOS antes de registrar
+            if (!$this->testPop3Connection($validated['username'], $validated['password'], 'pop.ionos.es', 995)) {
+                return response()->json(['error' => 'No se pudo conectar a IONOS con estas credenciales. Verifica tu usuario y contraseña de correo.'], 422);
+            }
+        }
+
         $isAdminRequest = $validated['is_admin'] ?? false;
         $canCreateAdmin = $isFirstUser || ($currentUser && $currentUser->is_admin);
         $finalIsAdmin = $isAdminRequest && $canCreateAdmin;
 
-        // Si no hay usuarios, el primero siempre es admin por defecto
         if ($isFirstUser) {
             $finalIsAdmin = true;
         }
 
-        // Si existe un usuario borrado lógicamente, lo restauramos
         $existingUser = User::withTrashed()->where('username', $validated['username'])->first();
 
         if ($existingUser && $existingUser->trashed()) {
             $existingUser->restore();
             $existingUser->password_hash = bcrypt($validated['password']);
             $existingUser->is_active = true;
-            $existingUser->is_admin = $finalIsAdmin && $isFirstUser; // nunca restaurar como admin salvo primer usuario
+            $existingUser->is_admin = $finalIsAdmin && $isFirstUser;
             $existingUser->save();
             $user = $existingUser;
         } else {
@@ -130,8 +150,8 @@ class AuthController extends Controller
         return response()->json([
             'token' => $token,
             'user'  => [
-                'id'       => $user->id,
-                'username' => $user->username,
+                'id'        => $user->id,
+                'username'  => $user->username,
                 'is_active' => $user->is_active,
                 'is_admin'  => $user->is_admin,
             ],
@@ -140,7 +160,6 @@ class AuthController extends Controller
 
     /**
      * GET /auth/me
-     * Devuelve el usuario autenticado actualmente.
      */
     public function me(Request $request): JsonResponse
     {
@@ -163,8 +182,7 @@ class AuthController extends Controller
 
     /**
      * POST /auth/hawcert-sync
-     * HawCert notifica un cambio de credencial → actualiza login y contraseña de correo.
-     * Protegido por secreto compartido (HAWCERT_SYNC_SECRET).
+     * HawCert notifica un cambio de credencial → actualiza contraseña de correo.
      */
     public function hawcertSync(Request $request): JsonResponse
     {
@@ -185,11 +203,9 @@ class AuthController extends Controller
             return response()->json(['error' => 'Usuario no encontrado en GestorCorreo.'], 404);
         }
 
-        // Actualizar contraseña de login
         $user->password_hash = bcrypt($validated['password']);
         $user->save();
 
-        // Sincronizar contraseña de correo en todas las cuentas del usuario
         $encryption = app(EncryptionService::class);
         Account::where('user_id', $user->id)
             ->where('is_deleted', false)
@@ -199,5 +215,55 @@ class AuthController extends Controller
             });
 
         return response()->json(['success' => true, 'message' => 'Credenciales sincronizadas correctamente.']);
+    }
+
+    /**
+     * Prueba una conexión POP3 real con las credenciales dadas.
+     * Devuelve true si la autenticación es exitosa.
+     */
+    private function testPop3Connection(string $username, string $password, string $host, int $port): bool
+    {
+        try {
+            $isSsl = in_array($port, [965, 995], true);
+            $transport = $isSsl ? 'tls' : 'tcp';
+            $target = sprintf('%s://%s:%d', $transport, $host, $port);
+
+            $ctx = stream_context_create([
+                'ssl' => [
+                    'verify_peer'       => false,
+                    'verify_peer_name'  => false,
+                    'allow_self_signed' => true,
+                ],
+            ]);
+
+            $socket = @stream_socket_client($target, $errno, $errstr, 15, STREAM_CLIENT_CONNECT, $ctx);
+            if (!is_resource($socket)) {
+                return false;
+            }
+
+            stream_set_timeout($socket, 15);
+
+            $line = fgets($socket, 512);
+            if (!$line || !str_starts_with(trim($line), '+OK')) {
+                fclose($socket);
+                return false;
+            }
+
+            fwrite($socket, "USER {$username}\r\n");
+            $line = fgets($socket, 512);
+            if (!$line || !str_starts_with(trim($line), '+OK')) {
+                fclose($socket);
+                return false;
+            }
+
+            fwrite($socket, "PASS {$password}\r\n");
+            $line = fgets($socket, 512);
+            fwrite($socket, "QUIT\r\n");
+            fclose($socket);
+
+            return str_starts_with(trim($line), '+OK');
+        } catch (\Throwable $e) {
+            return false;
+        }
     }
 }
