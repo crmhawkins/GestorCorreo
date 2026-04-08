@@ -407,7 +407,7 @@ select.form-control option { background: var(--surface); }
     max-height: 90vh; display: flex; flex-direction: column;
     box-shadow: 0 20px 60px rgba(0,0,0,.5);
 }
-.compose-box { max-width: 620px; }
+.compose-box { max-width: 1370px; width: 96vw; }
 .modal-header {
     padding: 1rem 1.25rem;
     border-bottom: 1px solid var(--border-light);

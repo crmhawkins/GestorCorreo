@@ -1,8 +1,8 @@
 /**
- * Hawkins Mail v.07 – Vanilla JS frontend
+ * Hawkins Mail v.08 – Vanilla JS frontend
  * Calls the existing Laravel API at /api/*
  */
-console.log('%c📧 Hawkins Mail v.07', 'color:#667eea;font-size:15px;font-weight:bold');
+console.log('%c📧 Hawkins Mail v.08', 'color:#667eea;font-size:15px;font-weight:bold');
 
 /* ── State ──────────────────────────────────────────────────────── */
 const S = {
@@ -753,6 +753,7 @@ function openCompose(mode = 'new', originalMsg = null) {
 }
 
 window.replyTo = function (mode) {
+    document.getElementById('modal-message-large').style.display = 'none';
     openCompose(mode, S.activeMessage);
 };
 

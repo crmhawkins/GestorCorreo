@@ -12,7 +12,7 @@
                     <div class="sidebar-brand-mark">H</div>
                     <div class="sidebar-brand-name">
                         Hawkins Mail
-                        <span class="version">v.07</span>
+                        <span class="version">v.08</span>
                     </div>
                 </div>
                 <div style="display:flex; gap:0.25rem; align-items:center;">
