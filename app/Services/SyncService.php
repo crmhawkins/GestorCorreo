@@ -126,97 +126,58 @@ class SyncService
                 return ['status' => 'error', 'new_messages' => 0, 'new_message_ids' => [], 'error' => $error];
             }
 
-            // Detectar si es primera sincronización
-            $existingCount   = Message::where('account_id', $account->id)->count();
-            $isFirstSync     = $existingCount === 0;
+            // UIDs ya descargados — fuente de verdad: la propia BD
+            $downloadedUids = Message::where('account_id', $account->id)
+                ->whereNotNull('imap_uid')
+                ->pluck('imap_uid')
+                ->flip()
+                ->all();
 
-            // Cargar cache desde BD (persiste entre reinicios del contenedor)
-            $cacheKey  = "pop3_cache_{$account->id}";
-            $cacheData = Cache::get($cacheKey, []);
-            $cachedUids    = $cacheData['uids']       ?? [];
-            $lastMsgCount  = $cacheData['last_count'] ?? 0;
-
-            // Mapa hash para búsqueda O(1) en lugar de in_array O(n)
-            $cachedUidsMap = array_flip($cachedUids);
-
-            // Obtener total actual del servidor
-            $currentCount = $pop3->getMessageCount();
-
-            // Bootstrap POP3: si no hay cache previa, tomamos el estado actual como base
-            // para evitar procesar todo el histórico la primera vez.
-            if ($lastMsgCount === 0 && empty($cachedUids) && $currentCount > 0) {
-                $allUidls = $pop3->getAllUidls();
-                Cache::put($cacheKey, [
-                    'uids'       => array_values(array_map('strval', array_values($allUidls))),
-                    'last_count' => $currentCount,
-                ], now()->addDays(90));
-
-                return ['status' => 'success', 'new_messages' => 0, 'new_message_ids' => [], 'error' => null];
-            }
-
-            // Obtener UIDLs actuales del servidor y procesar sólo los no vistos.
+            // Obtener UIDLs del servidor y calcular pendientes
             $allUidls = $pop3->getAllUidls();
-            $allOverviews = [];
+            $pending  = [];
             foreach ($allUidls as $msgNum => $uid) {
-                if (!isset($cachedUidsMap[$uid])) {
-                    $allOverviews[$msgNum] = (object)['uid' => $uid];
+                if (!isset($downloadedUids[(string)$uid])) {
+                    $pending[$msgNum] = (string)$uid;
                 }
             }
 
-            foreach ($allOverviews as $msgNum => $ov) {
-                $uid = $ov->uid;
-
-                if (isset($cachedUidsMap[$uid])) {
-                    continue;
-                }
-
+            foreach ($pending as $msgNum => $uid) {
                 try {
-                    // Email nuevo o no es primera sync: descargar cuerpo completo
                     $msgData = $pop3->fetchMessage($msgNum);
                     if (!$msgData) {
                         Log::warning("SyncService POP3: No se pudo obtener mensaje #{$msgNum}", ['account_id' => $account->id]);
                         continue;
                     }
 
-                    // No sincronizar correos anteriores a la fecha mínima.
-                    if (!$this->isDateAllowed($msgData['date'] ?? null)) {
-                        $cachedUidsMap[$uid] = 1;
-                        continue;
-                    }
+                    if (!$this->isDateAllowed($msgData['date'] ?? null)) continue;
 
                     $ovMessageId = $msgData['message_id'] ?? '';
 
-                    // Evitar duplicados por message_id
-                    if ($ovMessageId) {
-                        $alreadyInDb = Message::where('message_id', $ovMessageId)
-                            ->where('account_id', $account->id)
-                            ->exists();
-                        if ($alreadyInDb) {
-                            $cachedUidsMap[$uid] = 1;
-                            continue;
-                        }
+                    if ($ovMessageId && Message::where('message_id', $ovMessageId)->where('account_id', $account->id)->exists()) {
+                        continue;
                     }
 
                     $messageId = (string) Str::uuid();
                     $message   = Message::create([
-                        'id'             => $messageId,
-                        'account_id'     => $account->id,
-                        'imap_uid'       => null,
-                        'message_id'     => $msgData['message_id'] ?? '',
-                        'subject'        => $msgData['subject']    ?? '',
-                        'from_name'      => $msgData['from_name']  ?? '',
-                        'from_email'     => $msgData['from_email'] ?? '',
-                        'to_addresses'   => $msgData['to_addresses'] ?? '[]',
-                        'cc_addresses'   => $msgData['cc_addresses'] ?? '[]',
-                        'date'           => Carbon::parse($msgData['date']),
-                        'snippet'        => $msgData['snippet'] ?? '',
-                        'folder'         => 'INBOX',
-                        'body_text'      => $msgData['body_text'] ?? '',
-                        'body_html'      => $msgData['body_html'] ?? '',
+                        'id'              => $messageId,
+                        'account_id'      => $account->id,
+                        'imap_uid'        => $uid,
+                        'message_id'      => $ovMessageId,
+                        'subject'         => $msgData['subject']      ?? '',
+                        'from_name'       => $msgData['from_name']    ?? '',
+                        'from_email'      => $msgData['from_email']   ?? '',
+                        'to_addresses'    => $msgData['to_addresses'] ?? '[]',
+                        'cc_addresses'    => $msgData['cc_addresses'] ?? '[]',
+                        'date'            => Carbon::parse($msgData['date']),
+                        'snippet'         => $msgData['snippet']      ?? '',
+                        'folder'          => 'INBOX',
+                        'body_text'       => $msgData['body_text']    ?? '',
+                        'body_html'       => $msgData['body_html']    ?? '',
                         'has_attachments' => $msgData['has_attachments'] ?? false,
-                        'is_read'        => false,
-                        'is_starred'     => false,
-                        'created_at'     => now(),
+                        'is_read'         => false,
+                        'is_starred'      => false,
+                        'created_at'      => now(),
                     ]);
 
                     if (!empty($msgData['attachments'])) {
@@ -225,7 +186,6 @@ class SyncService
 
                     $this->classificationService->classifyMessage($message, $account);
 
-                    $cachedUidsMap[$uid] = 1;
                     $newMessageIds[] = $messageId;
                     $newMessages++;
                 } catch (\Throwable $e) {
@@ -235,12 +195,6 @@ class SyncService
                     ]);
                 }
             }
-
-            // Guardar cache actualizada con last_count para optimizar próximas syncs
-            Cache::put($cacheKey, [
-                'uids'       => array_keys($cachedUidsMap),
-                'last_count' => $currentCount,
-            ], now()->addDays(90));
 
             // Limpiar error previo si sync fue exitosa
             if ($account->last_sync_error) {
@@ -442,127 +396,97 @@ class SyncService
                 return;
             }
 
-            $existingCount = Message::where('account_id', $account->id)->count();
-            $isFirstSync   = $existingCount === 0;
-
-            $cacheKey  = "pop3_cache_{$account->id}";
-            $cacheData = Cache::get($cacheKey, []);
-            $cachedUids    = $cacheData['uids']       ?? [];
-            $lastMsgCount  = $cacheData['last_count']  ?? 0;
-            // Mapa hash para búsqueda O(1)
-            $cachedUidsMap = array_flip($cachedUids);
-
             yield ['status' => 'downloading', 'current' => 0, 'total' => 0, 'message' => 'Obteniendo lista de mensajes...'];
 
-            // Obtener total actual del servidor
-            $currentCount = $pop3->getMessageCount();
+            // UIDs ya descargados — fuente de verdad: la propia BD (campo imap_uid)
+            $downloadedUids = Message::where('account_id', $account->id)
+                ->whereNotNull('imap_uid')
+                ->pluck('imap_uid')
+                ->flip()
+                ->all();
 
-            // Bootstrap POP3 en streaming: no procesar histórico inicial.
-            if ($lastMsgCount === 0 && empty($cachedUids) && $currentCount > 0) {
-                $allUidls = $pop3->getAllUidls();
-                Cache::put($cacheKey, [
-                    'uids'       => array_values(array_map('strval', array_values($allUidls))),
-                    'last_count' => $currentCount,
-                ], now()->addDays(90));
-                yield ['status' => 'success', 'new_messages' => 0, 'new_message_ids' => [], 'message' => 'Estado inicial de POP3 guardado. Se sincronizarán solo correos nuevos.'];
-                return;
-            }
+            // Obtener todos los UIDs del servidor
+            $allUidls = $pop3->getAllUidls();
 
-            $allUidls     = $pop3->getAllUidls();
-
+            // Calcular pendientes
             $pending = [];
             foreach ($allUidls as $msgNum => $uid) {
-                if (!isset($cachedUidsMap[$uid])) {
-                    $pending[$msgNum] = ['uid' => $uid];
+                if (!isset($downloadedUids[(string)$uid])) {
+                    $pending[$msgNum] = (string)$uid;
                 }
             }
 
-            yield ['status' => 'downloading', 'current' => 0, 'total' => count($pending), 'message' => 'Lista de mensajes obtenida.'];
+            $totalPending = count($pending);
 
-            $total   = count($pending);
-            $current = 0;
+            if ($totalPending === 0) {
+                yield ['status' => 'success', 'new_messages' => 0, 'new_message_ids' => [], 'message' => 'No hay mensajes nuevos.'];
+                return;
+            }
 
-            yield ['status' => 'downloading', 'current' => 0, 'total' => $total, 'message' => "Procesando {$total} mensajes nuevos..."];
+            // Aplicar BATCH_SIZE para evitar timeouts
+            $batch     = array_slice($pending, 0, self::BATCH_SIZE, true);
+            $remaining = $totalPending - count($batch);
+            $suffix    = $remaining > 0 ? " ({$remaining} más en la próxima sync)" : '';
 
-            $newMessages    = 0;
-            $newMessageIds  = [];
-            $toClassify     = [];
+            yield ['status' => 'downloading', 'current' => 0, 'total' => count($batch), 'message' => "Descargando " . count($batch) . " mensajes{$suffix}..."];
 
-            foreach ($pending as $msgNum => $item) {
-                $uid = $item['uid'];
+            $total         = count($batch);
+            $current       = 0;
+            $newMessages   = 0;
+            $newMessageIds = [];
+            $toClassify    = [];
+
+            foreach ($batch as $msgNum => $uid) {
                 $current++;
                 yield ['status' => 'downloading', 'current' => $current, 'total' => $total];
 
                 try {
-                    // Descargar mensaje completo directamente
                     $msgData = $pop3->fetchMessage($msgNum);
                     if (!$msgData) continue;
 
+                    // Aplicar fecha mínima de sincronización
+                    if (!$this->isDateAllowed($msgData['date'] ?? null)) continue;
+
                     $ovMessageId = $msgData['message_id'] ?? '';
 
-                    // Aplicar fecha mínima de sincronización.
-                    if (!$this->isDateAllowed($msgData['date'] ?? null)) {
-                        $cachedUidsMap[$uid] = 1;
-                        continue;
-                    }
-
                     // Evitar duplicados por message_id
-                    if ($ovMessageId) {
-                        $exists = Message::where('message_id', $ovMessageId)
-                            ->where('account_id', $account->id)
-                            ->exists();
-                        if ($exists) {
-                            $cachedUidsMap[$uid] = 1;
-                            continue;
-                        }
+                    if ($ovMessageId && Message::where('message_id', $ovMessageId)->where('account_id', $account->id)->exists()) {
+                        continue;
                     }
 
                     $messageId = (string) Str::uuid();
                     $message   = Message::create([
-                        'id'             => $messageId,
-                        'account_id'     => $account->id,
-                        'imap_uid'       => null,
-                        'message_id'     => $ovMessageId,
-                        'subject'        => $msgData['subject']    ?? '',
-                        'from_name'      => $msgData['from_name']  ?? '',
-                        'from_email'     => $msgData['from_email'] ?? '',
-                        'to_addresses'   => $msgData['to_addresses'] ?? '[]',
-                        'cc_addresses'   => $msgData['cc_addresses'] ?? '[]',
-                        'date'           => Carbon::parse($msgData['date']),
-                        'snippet'        => $msgData['snippet'] ?? '',
-                        'folder'         => 'INBOX',
-                        'body_text'      => $msgData['body_text'] ?? '',
-                        'body_html'      => $msgData['body_html'] ?? '',
+                        'id'              => $messageId,
+                        'account_id'      => $account->id,
+                        'imap_uid'        => $uid,  // guardamos el UIDL como fuente de verdad
+                        'message_id'      => $ovMessageId,
+                        'subject'         => $msgData['subject']      ?? '',
+                        'from_name'       => $msgData['from_name']    ?? '',
+                        'from_email'      => $msgData['from_email']   ?? '',
+                        'to_addresses'    => $msgData['to_addresses'] ?? '[]',
+                        'cc_addresses'    => $msgData['cc_addresses'] ?? '[]',
+                        'date'            => Carbon::parse($msgData['date']),
+                        'snippet'         => $msgData['snippet']      ?? '',
+                        'folder'          => 'INBOX',
+                        'body_text'       => $msgData['body_text']    ?? '',
+                        'body_html'       => $msgData['body_html']    ?? '',
                         'has_attachments' => $msgData['has_attachments'] ?? false,
-                        'is_read'        => false,
-                        'is_starred'     => false,
-                        'created_at'     => now(),
+                        'is_read'         => false,
+                        'is_starred'      => false,
+                        'created_at'      => now(),
                     ]);
 
                     if (!empty($msgData['attachments'])) {
                         $this->saveAttachments($msgData['attachments'], $message);
                     }
 
-                    $cachedUidsMap[$uid] = 1;
                     $newMessageIds[] = $messageId;
                     $newMessages++;
-
                     $toClassify[] = ['message' => $message, 'account' => $account];
-
-                    // Guardar cache progresivamente para no perder progreso si se interrumpe
-                    Cache::put($cacheKey, [
-                        'uids'       => array_keys($cachedUidsMap),
-                        'last_count' => $currentCount,
-                    ], now()->addDays(90));
                 } catch (\Throwable $e) {
                     Log::error("SyncService POP3 streaming: Error en mensaje #{$msgNum}", ['error' => $e->getMessage()]);
                 }
             }
-
-            Cache::put($cacheKey, [
-                'uids'       => array_keys($cachedUidsMap),
-                'last_count' => $currentCount,
-            ], now()->addDays(90));
 
             // Clasificar
             if (!empty($toClassify)) {
