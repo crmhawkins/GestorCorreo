@@ -9,6 +9,7 @@ use App\Models\AuditLog;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Cache;
 use Carbon\Carbon;
 
 class SyncService
@@ -129,12 +130,9 @@ class SyncService
             $existingCount   = Message::where('account_id', $account->id)->count();
             $isFirstSync     = $existingCount === 0;
 
-            // Cargar cache
-            $cacheFile  = "pop3_cache/{$account->id}.json";
-            $cacheData  = [];
-            if (Storage::exists($cacheFile)) {
-                $cacheData = json_decode(Storage::get($cacheFile), true) ?? [];
-            }
+            // Cargar cache desde BD (persiste entre reinicios del contenedor)
+            $cacheKey  = "pop3_cache_{$account->id}";
+            $cacheData = Cache::get($cacheKey, []);
             $cachedUids    = $cacheData['uids']       ?? [];
             $lastMsgCount  = $cacheData['last_count'] ?? 0;
 
@@ -148,10 +146,10 @@ class SyncService
             // para evitar procesar todo el histórico la primera vez.
             if ($lastMsgCount === 0 && empty($cachedUids) && $currentCount > 0) {
                 $allUidls = $pop3->getAllUidls();
-                Storage::put($cacheFile, json_encode([
+                Cache::put($cacheKey, [
                     'uids'       => array_values(array_map('strval', array_values($allUidls))),
                     'last_count' => $currentCount,
-                ]));
+                ], now()->addDays(90));
 
                 return ['status' => 'success', 'new_messages' => 0, 'new_message_ids' => [], 'error' => null];
             }
@@ -239,10 +237,10 @@ class SyncService
             }
 
             // Guardar cache actualizada con last_count para optimizar próximas syncs
-            Storage::put($cacheFile, json_encode([
+            Cache::put($cacheKey, [
                 'uids'       => array_keys($cachedUidsMap),
                 'last_count' => $currentCount,
-            ]));
+            ], now()->addDays(90));
 
             // Limpiar error previo si sync fue exitosa
             if ($account->last_sync_error) {
@@ -447,11 +445,8 @@ class SyncService
             $existingCount = Message::where('account_id', $account->id)->count();
             $isFirstSync   = $existingCount === 0;
 
-            $cacheFile = "pop3_cache/{$account->id}.json";
-            $cacheData = [];
-            if (Storage::exists($cacheFile)) {
-                $cacheData = json_decode(Storage::get($cacheFile), true) ?? [];
-            }
+            $cacheKey  = "pop3_cache_{$account->id}";
+            $cacheData = Cache::get($cacheKey, []);
             $cachedUids    = $cacheData['uids']       ?? [];
             $lastMsgCount  = $cacheData['last_count']  ?? 0;
             // Mapa hash para búsqueda O(1)
@@ -465,10 +460,10 @@ class SyncService
             // Bootstrap POP3 en streaming: no procesar histórico inicial.
             if ($lastMsgCount === 0 && empty($cachedUids) && $currentCount > 0) {
                 $allUidls = $pop3->getAllUidls();
-                Storage::put($cacheFile, json_encode([
+                Cache::put($cacheKey, [
                     'uids'       => array_values(array_map('strval', array_values($allUidls))),
                     'last_count' => $currentCount,
-                ]));
+                ], now()->addDays(90));
                 yield ['status' => 'success', 'new_messages' => 0, 'new_message_ids' => [], 'message' => 'Estado inicial de POP3 guardado. Se sincronizarán solo correos nuevos.'];
                 return;
             }
@@ -555,19 +550,19 @@ class SyncService
                     $toClassify[] = ['message' => $message, 'account' => $account];
 
                     // Guardar cache progresivamente para no perder progreso si se interrumpe
-                    Storage::put($cacheFile, json_encode([
+                    Cache::put($cacheKey, [
                         'uids'       => array_keys($cachedUidsMap),
                         'last_count' => $currentCount,
-                    ]));
+                    ], now()->addDays(90));
                 } catch (\Throwable $e) {
                     Log::error("SyncService POP3 streaming: Error en mensaje #{$msgNum}", ['error' => $e->getMessage()]);
                 }
             }
 
-            Storage::put($cacheFile, json_encode([
+            Cache::put($cacheKey, [
                 'uids'       => array_keys($cachedUidsMap),
                 'last_count' => $currentCount,
-            ]));
+            ], now()->addDays(90));
 
             // Clasificar
             if (!empty($toClassify)) {
