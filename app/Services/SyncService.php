@@ -553,6 +553,12 @@ class SyncService
                     $newMessages++;
 
                     $toClassify[] = ['message' => $message, 'account' => $account];
+
+                    // Guardar cache progresivamente para no perder progreso si se interrumpe
+                    Storage::put($cacheFile, json_encode([
+                        'uids'       => array_keys($cachedUidsMap),
+                        'last_count' => $currentCount,
+                    ]));
                 } catch (\Throwable $e) {
                     Log::error("SyncService POP3 streaming: Error en mensaje #{$msgNum}", ['error' => $e->getMessage()]);
                 }
