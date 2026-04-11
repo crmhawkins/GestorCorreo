@@ -150,7 +150,30 @@ class SyncService
                         continue;
                     }
 
-                    if (!$this->isDateAllowed($msgData['date'] ?? null)) continue;
+                    if (!$this->isDateAllowed($msgData['date'] ?? null)) {
+                        // Guardar stub para que este UID no vuelva a procesarse
+                        Message::create([
+                            'id'              => (string) Str::uuid(),
+                            'account_id'      => $account->id,
+                            'imap_uid'        => $uid,
+                            'message_id'      => '_f_' . $uid . '_' . $account->id,
+                            'subject'         => '',
+                            'from_name'       => '',
+                            'from_email'      => '',
+                            'to_addresses'    => '[]',
+                            'cc_addresses'    => '[]',
+                            'date'            => Carbon::parse('2026-03-30'),
+                            'snippet'         => '',
+                            'folder'          => '_filtered',
+                            'body_text'       => '',
+                            'body_html'       => '',
+                            'has_attachments' => false,
+                            'is_read'         => true,
+                            'is_starred'      => false,
+                            'created_at'      => now(),
+                        ]);
+                        continue;
+                    }
 
                     $ovMessageId = $msgData['message_id'] ?? '';
 
@@ -445,7 +468,30 @@ class SyncService
                     if (!$msgData) continue;
 
                     // Aplicar fecha mínima de sincronización
-                    if (!$this->isDateAllowed($msgData['date'] ?? null)) continue;
+                    if (!$this->isDateAllowed($msgData['date'] ?? null)) {
+                        // Guardar stub para que este UID no vuelva a procesarse
+                        Message::create([
+                            'id'              => (string) Str::uuid(),
+                            'account_id'      => $account->id,
+                            'imap_uid'        => $uid,
+                            'message_id'      => '_f_' . $uid . '_' . $account->id,
+                            'subject'         => '',
+                            'from_name'       => '',
+                            'from_email'      => '',
+                            'to_addresses'    => '[]',
+                            'cc_addresses'    => '[]',
+                            'date'            => Carbon::parse('2026-03-30'),
+                            'snippet'         => '',
+                            'folder'          => '_filtered',
+                            'body_text'       => '',
+                            'body_html'       => '',
+                            'has_attachments' => false,
+                            'is_read'         => true,
+                            'is_starred'      => false,
+                            'created_at'      => now(),
+                        ]);
+                        continue;
+                    }
 
                     $ovMessageId = $msgData['message_id'] ?? '';
 

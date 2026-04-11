@@ -1,5 +1,5 @@
 @extends('layouts.app')
-@section('title', 'Hawkins Mail')
+@section('title', 'Hawkins Mail v.14')
 
 @section('content')
 <div class="mail-app" id="app">
@@ -12,7 +12,7 @@
                     <div class="sidebar-brand-mark">H</div>
                     <div class="sidebar-brand-name">
                         Hawkins Mail
-                        <span class="version">v.13</span>
+                        <span class="version">v.14</span>
                     </div>
                 </div>
                 <div style="display:flex; gap:0.25rem; align-items:center;">
