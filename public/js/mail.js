@@ -671,11 +671,33 @@ async function doSync() {
 }
 
 function updateSyncStatus(ev, el) {
+    const status = ev.status || '';
+    const msg    = ev.message || ev.error || '';
+    const cur    = ev.current ?? 0;
+    const tot    = ev.total   ?? 0;
+    const pct    = tot > 0 ? Math.round((cur / tot) * 100) : 0;
+
+    if (status === 'classifying_progress') {
+        const label = cur === 0
+            ? `🤖 Analizando con IA… (${tot} mensajes)`
+            : `🤖 Analizando con IA ${cur} de ${tot}`;
+        el.innerHTML = `
+            <div>${escHtml(label)}</div>
+            ${tot > 0 ? `<div class="sync-bar"><div class="sync-bar-fill" style="width:${pct}%"></div></div>` : ''}
+        `;
+        return;
+    }
+
+    if (status === 'downloading' && tot > 0 && cur > 0) {
+        const label = `📥 Descargando email ${cur} de ${tot}`;
+        el.innerHTML = `
+            <div>${escHtml(label)}</div>
+            <div class="sync-bar"><div class="sync-bar-fill" style="width:${pct}%"></div></div>
+        `;
+        return;
+    }
+
     const phase = ev.phase || '';
-    const msg = ev.message || ev.error || '';
-    const cur = ev.current ?? 0;
-    const tot = ev.total ?? 0;
-    const pct = tot > 0 ? Math.round((cur / tot) * 100) : 0;
     el.innerHTML = `
         <div>${phase ? `[${phase}] ` : ''}${escHtml(msg)}</div>
         ${tot > 0 ? `<div>${cur}/${tot} completados (${pct}%)</div>
