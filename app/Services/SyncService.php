@@ -144,7 +144,7 @@ class SyncService
             }
 
             // Procesar de más reciente a más antiguo para que emails nuevos lleguen primero
-            arsort($pending);
+            krsort($pending);
 
             foreach ($pending as $msgNum => $uid) {
                 try {
@@ -453,7 +453,7 @@ class SyncService
             }
 
             // Procesar de más reciente a más antiguo para que emails nuevos lleguen primero
-            arsort($pending);
+            krsort($pending);
 
             $totalPending = count($pending);
 

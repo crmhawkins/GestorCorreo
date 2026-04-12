@@ -1163,11 +1163,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
-    // Auto-sync cada minuto (si no hay una sync en curso, doSync ya lo evita).
+    // Auto-sync cada 5 minutos (si no hay una sync en curso, doSync ya lo evita).
     if (S.autoSyncTimer) clearInterval(S.autoSyncTimer);
     S.autoSyncTimer = setInterval(() => {
         if (document.visibilityState === 'visible') {
             doSync();
         }
-    }, 60000);
+    }, 5 * 60 * 1000);
 });
