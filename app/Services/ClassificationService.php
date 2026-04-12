@@ -104,6 +104,12 @@ class ClassificationService
             }
 
             // 5. Crear o actualizar Classification en BD
+            // Si ya fue clasificado manualmente, no sobreescribir con IA
+            $existing = Classification::where('message_id', $message->id)->first();
+            if ($existing && $existing->decided_by === 'manual') {
+                return $existing;
+            }
+
             $classification = Classification::updateOrCreate(
                 ['message_id' => $message->id],
                 $classificationData

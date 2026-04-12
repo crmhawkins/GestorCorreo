@@ -1,5 +1,5 @@
 @extends('layouts.app')
-@section('title', 'Hawkins Mail v.15')
+@section('title', 'Hawkins Mail v.16')
 
 @section('content')
 <div class="mail-app" id="app">
