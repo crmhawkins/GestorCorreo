@@ -189,8 +189,8 @@ class SyncService
                     if ($ovMessageId) {
                         $existing = Message::where('message_id', $ovMessageId)->where('account_id', $account->id)->first();
                         if ($existing) {
-                            // Backfill imap_uid en mensajes que ya existen sin él
-                            if (!$existing->imap_uid) {
+                            // Siempre actualizar imap_uid al valor real del servidor
+                            if ($existing->imap_uid !== $uid) {
                                 $existing->imap_uid = $uid;
                                 $existing->save();
                             }
