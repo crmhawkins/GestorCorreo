@@ -110,8 +110,9 @@ class SyncService
      */
     public function syncPop3(Account $account, string $password): array
     {
-        // Ampliar límite de ejecución para sincronizaciones largas
+        // Ampliar límite de ejecución y memoria para sincronizaciones largas
         set_time_limit(600);
+        ini_set('memory_limit', '512M');
 
         $newMessages    = 0;
         $newMessageIds  = [];
@@ -198,13 +199,13 @@ class SyncService
                         'account_id'      => $account->id,
                         'imap_uid'        => $uid,
                         'message_id'      => $ovMessageId,
-                        'subject'         => $msgData['subject']      ?? '',
-                        'from_name'       => $msgData['from_name']    ?? '',
-                        'from_email'      => $msgData['from_email']   ?? '',
+                        'subject'         => $this->safeText($msgData['subject']   ?? '', 500),
+                        'from_name'       => $this->safeText($msgData['from_name'] ?? '', 255),
+                        'from_email'      => $this->safeText($msgData['from_email'] ?? '', 255),
                         'to_addresses'    => $msgData['to_addresses'] ?? '[]',
                         'cc_addresses'    => $msgData['cc_addresses'] ?? '[]',
                         'date'            => Carbon::parse($msgData['date']),
-                        'snippet'         => $msgData['snippet']      ?? '',
+                        'snippet'         => $this->safeText($msgData['snippet']   ?? '', 200),
                         'folder'          => 'INBOX',
                         'body_text'       => $msgData['body_text']    ?? '',
                         'body_html'       => $msgData['body_html']    ?? '',
@@ -422,6 +423,7 @@ class SyncService
     private function syncPop3Streaming(Account $account, string $password): \Generator
     {
         set_time_limit(600);
+        ini_set('memory_limit', '512M');
         $pop3 = new Pop3Service($account, $password);
 
         try {
@@ -527,13 +529,13 @@ class SyncService
                         'account_id'      => $account->id,
                         'imap_uid'        => $uid,  // guardamos el UIDL como fuente de verdad
                         'message_id'      => $ovMessageId,
-                        'subject'         => $msgData['subject']      ?? '',
-                        'from_name'       => $msgData['from_name']    ?? '',
-                        'from_email'      => $msgData['from_email']   ?? '',
+                        'subject'         => $this->safeText($msgData['subject']   ?? '', 500),
+                        'from_name'       => $this->safeText($msgData['from_name'] ?? '', 255),
+                        'from_email'      => $this->safeText($msgData['from_email'] ?? '', 255),
                         'to_addresses'    => $msgData['to_addresses'] ?? '[]',
                         'cc_addresses'    => $msgData['cc_addresses'] ?? '[]',
                         'date'            => Carbon::parse($msgData['date']),
-                        'snippet'         => $msgData['snippet']      ?? '',
+                        'snippet'         => $this->safeText($msgData['snippet']   ?? '', 200),
                         'folder'          => 'INBOX',
                         'body_text'       => $msgData['body_text']    ?? '',
                         'body_html'       => $msgData['body_html']    ?? '',
