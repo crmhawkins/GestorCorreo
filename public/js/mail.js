@@ -1059,6 +1059,10 @@ function promptMailPassword() {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
+    // Limpiar campos que el navegador puede restaurar al recargar
+    const si = document.getElementById('search-input');
+    if (si) si.value = '';
+
     applyUiFontSize(localStorage.getItem('ui_font_size') || '13');
 
     // Inicializar Quill editor
