@@ -1059,9 +1059,13 @@ function promptMailPassword() {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
-    // Limpiar campos que el navegador puede restaurar al recargar
-    const si = document.getElementById('search-input');
-    if (si) si.value = '';
+    // Limpiar campo búsqueda (Chrome restaura valores después del DOMContentLoaded)
+    const clearSearch = () => {
+        const si = document.getElementById('search-input');
+        if (si && si.value) { si.value = ''; S.search = ''; }
+    };
+    clearSearch();
+    setTimeout(clearSearch, 200);
 
     applyUiFontSize(localStorage.getItem('ui_font_size') || '13');
 

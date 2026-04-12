@@ -50,12 +50,17 @@ class SyncService
      */
     private function safeText(string $text, int $maxChars = 200): string
     {
-        // Convertir a UTF-8 válido eliminando secuencias inválidas
         $text = mb_convert_encoding($text, 'UTF-8', 'UTF-8');
-        // Eliminar bytes nulos y caracteres de control problemáticos
         $text = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/u', '', $text);
-        // Truncar respetando caracteres multibyte
         return mb_substr($text, 0, $maxChars);
+    }
+
+    /** Limpia UTF-8 sin truncar — para body_text y body_html */
+    private function safeBody(string $text): string
+    {
+        $text = mb_convert_encoding($text, 'UTF-8', 'UTF-8');
+        $text = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/u', '', $text);
+        return $text;
     }
 
     private function getSyncMinDate(): Carbon
@@ -207,8 +212,8 @@ class SyncService
                         'date'            => Carbon::parse($msgData['date']),
                         'snippet'         => $this->safeText($msgData['snippet']   ?? '', 200),
                         'folder'          => 'INBOX',
-                        'body_text'       => $msgData['body_text']    ?? '',
-                        'body_html'       => $msgData['body_html']    ?? '',
+                        'body_text'       => $this->safeBody($msgData['body_text'] ?? ''),
+                        'body_html'       => $this->safeBody($msgData['body_html'] ?? ''),
                         'has_attachments' => $msgData['has_attachments'] ?? false,
                         'is_read'         => false,
                         'is_starred'      => false,
@@ -339,8 +344,8 @@ class SyncService
                         'date'           => $headers['date'] ?? now(),
                         'snippet'        => $snippet,
                         'folder'         => 'INBOX',
-                        'body_text'      => $bodyText,
-                        'body_html'      => $bodyHtml,
+                        'body_text'      => $this->safeBody($bodyText),
+                        'body_html'      => $this->safeBody($bodyHtml),
                         'has_attachments' => !empty($bodyData['attachments']),
                         'is_read'        => false,
                         'is_starred'     => false,
@@ -537,8 +542,8 @@ class SyncService
                         'date'            => Carbon::parse($msgData['date']),
                         'snippet'         => $this->safeText($msgData['snippet']   ?? '', 200),
                         'folder'          => 'INBOX',
-                        'body_text'       => $msgData['body_text']    ?? '',
-                        'body_html'       => $msgData['body_html']    ?? '',
+                        'body_text'       => $this->safeBody($msgData['body_text'] ?? ''),
+                        'body_html'       => $this->safeBody($msgData['body_html'] ?? ''),
                         'has_attachments' => $msgData['has_attachments'] ?? false,
                         'is_read'         => false,
                         'is_starred'      => false,
@@ -654,8 +659,8 @@ class SyncService
                         'date'           => $headers['date'] ?? now(),
                         'snippet'        => $snippet,
                         'folder'         => 'INBOX',
-                        'body_text'      => $bodyText,
-                        'body_html'      => $bodyHtml,
+                        'body_text'      => $this->safeBody($bodyText),
+                        'body_html'      => $this->safeBody($bodyHtml),
                         'has_attachments' => !empty($bodyData['attachments']),
                         'is_read'        => false,
                         'is_starred'     => false,
