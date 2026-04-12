@@ -89,6 +89,11 @@ class ClassifyController extends Controller
             ]
         );
 
+        // Mover el mensaje a su carpeta (igual que ClassificationService)
+        $newFolder = (strtolower((string) $label) === 'interesantes') ? 'INBOX' : $label;
+        $message->folder = $newFolder;
+        $message->save();
+
         return response()->json(['updated' => 1, 'classification' => $classification]);
     }
 
