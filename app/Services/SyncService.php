@@ -142,6 +142,9 @@ class SyncService
                 }
             }
 
+            // Procesar de más reciente a más antiguo para que emails nuevos lleguen primero
+            arsort($pending);
+
             foreach ($pending as $msgNum => $uid) {
                 try {
                     $msgData = $pop3->fetchMessage($msgNum);
@@ -177,8 +180,16 @@ class SyncService
 
                     $ovMessageId = $msgData['message_id'] ?? '';
 
-                    if ($ovMessageId && Message::where('message_id', $ovMessageId)->where('account_id', $account->id)->exists()) {
-                        continue;
+                    if ($ovMessageId) {
+                        $existing = Message::where('message_id', $ovMessageId)->where('account_id', $account->id)->first();
+                        if ($existing) {
+                            // Backfill imap_uid en mensajes que ya existen sin él
+                            if (!$existing->imap_uid) {
+                                $existing->imap_uid = $uid;
+                                $existing->save();
+                            }
+                            continue;
+                        }
                     }
 
                     $messageId = (string) Str::uuid();
@@ -439,6 +450,9 @@ class SyncService
                 }
             }
 
+            // Procesar de más reciente a más antiguo para que emails nuevos lleguen primero
+            arsort($pending);
+
             $totalPending = count($pending);
 
             if ($totalPending === 0) {
@@ -495,9 +509,16 @@ class SyncService
 
                     $ovMessageId = $msgData['message_id'] ?? '';
 
-                    // Evitar duplicados por message_id
-                    if ($ovMessageId && Message::where('message_id', $ovMessageId)->where('account_id', $account->id)->exists()) {
-                        continue;
+                    // Evitar duplicados por message_id; backfill imap_uid si falta
+                    if ($ovMessageId) {
+                        $existing = Message::where('message_id', $ovMessageId)->where('account_id', $account->id)->first();
+                        if ($existing) {
+                            if (!$existing->imap_uid) {
+                                $existing->imap_uid = $uid;
+                                $existing->save();
+                            }
+                            continue;
+                        }
                     }
 
                     $messageId = (string) Str::uuid();
