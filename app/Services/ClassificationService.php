@@ -109,11 +109,18 @@ class ClassificationService
                 $classificationData
             );
 
-            // Mantener siempre el correo recibido en INBOX.
-            // La clasificación se usa como "carpeta lógica" (label) sin mover físicamente el mensaje.
-            if (strtoupper((string) $message->folder) !== 'INBOX') {
-                $message->folder = 'INBOX';
-                $message->save();
+            // Mover el mensaje a su carpeta según la clasificación.
+            // Solo "Interesantes" permanece en INBOX; el resto se mueve a su carpeta lógica.
+            $label = $classificationData['final_label'] ?? null;
+            if ($label && strtoupper((string) $message->folder) === 'INBOX') {
+                $newFolder = match(strtolower($label)) {
+                    'interesantes' => 'INBOX',
+                    default        => $label,
+                };
+                if ($newFolder !== 'INBOX') {
+                    $message->folder = $newFolder;
+                    $message->save();
+                }
             }
 
             return $classification;
