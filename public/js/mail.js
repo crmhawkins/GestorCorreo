@@ -335,7 +335,7 @@ async function renderViewer(msg) {
     const previewHtml = buildPreviewHtml(m);
     const normalizedText = normalizeBodyTextForReply(m.body_text, m.body_html);
     const bodyHtml = previewHtml
-        ? `<div class="viewer-body-html"><iframe srcdoc="${escHtml(previewHtml)}" sandbox="allow-same-origin"></iframe></div>`
+        ? `<div class="viewer-body-html"><iframe srcdoc="${escHtml(previewHtml)}" sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation"></iframe></div>`
         : `<div class="viewer-body-text">${escHtml(normalizedText || '')}</div>`;
 
     viewer.innerHTML = `
@@ -806,7 +806,7 @@ window.openMessageLarge = async function (id) {
     const previewHtml = buildPreviewHtml(m);
     const normalizedText = normalizeBodyTextForReply(m.body_text, m.body_html);
     const body = previewHtml
-        ? `<div class="viewer-body-html"><iframe srcdoc="${escHtml(previewHtml)}" sandbox="allow-same-origin"></iframe></div>`
+        ? `<div class="viewer-body-html"><iframe srcdoc="${escHtml(previewHtml)}" sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation"></iframe></div>`
         : `<div class="viewer-body-text">${escHtml(normalizedText || '')}</div>`;
     document.getElementById('message-large-content').innerHTML = `
         <div class="message-viewer-wrap">
