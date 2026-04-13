@@ -15,6 +15,9 @@ use Illuminate\Support\Str;
 
 class SendController extends Controller
 {
+    /** Tamaño máximo por adjunto: 25 MB */
+    private const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
+
     public function __construct(private EncryptionService $encryption) {}
 
     /**
@@ -101,6 +104,11 @@ class SendController extends Controller
                 $decoded = $this->decodeAttachmentPayload((string)($att['content_base64'] ?? ''));
                 if ($decoded === null || $decoded === '') {
                     continue;
+                }
+                if (strlen($decoded) > self::MAX_ATTACHMENT_BYTES) {
+                    return response()->json([
+                        'error' => 'El adjunto "' . ($att['name'] ?? 'sin nombre') . '" supera el límite de 25 MB.',
+                    ], 422);
                 }
                 $emailData['attachments'][] = [
                     'name'      => $att['name'] ?? ('attachment_' . uniqid()),

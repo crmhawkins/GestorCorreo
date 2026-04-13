@@ -125,7 +125,8 @@ class MessageController extends Controller
 
         // Búsqueda por asunto o remitente
         if (!empty($validated['search'])) {
-            $search = '%' . $validated['search'] . '%';
+            $escaped = str_replace(['%', '_'], ['\\%', '\\_'], $validated['search']);
+            $search = '%' . $escaped . '%';
             $query->where(function ($q) use ($search) {
                 $q->where('subject', 'like', $search)
                   ->orWhere('from_name', 'like', $search)

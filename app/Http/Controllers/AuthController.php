@@ -188,7 +188,7 @@ class AuthController extends Controller
     {
         $secret = env('HAWCERT_SYNC_SECRET', '');
 
-        if ($secret === '' || $request->input('secret') !== $secret) {
+        if ($secret === '' || !hash_equals($secret, (string) $request->input('secret', ''))) {
             return response()->json(['error' => 'No autorizado.'], 401);
         }
 

@@ -76,6 +76,13 @@ class AttachmentController extends Controller
             return response()->json(['error' => 'El archivo del adjunto no existe en el servidor.'], 404);
         }
 
+        // Prevenir path traversal: el archivo debe estar dentro del directorio de storage
+        $realPath = realpath($absolutePath);
+        $storageBase = realpath(storage_path('app'));
+        if ($realPath === false || $storageBase === false || !str_starts_with($realPath, $storageBase)) {
+            return response()->json(['error' => 'Ruta de archivo no permitida.'], 403);
+        }
+
         $mimeType = $attachment->mime_type ?: 'application/octet-stream';
         $filename = $attachment->filename   ?: 'attachment';
 
