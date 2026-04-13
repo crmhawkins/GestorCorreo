@@ -101,6 +101,13 @@ Route::middleware('auth:sanctum')->group(function () {
     // Sender Rules
     Route::apiResource('rules', App\Http\Controllers\RulesController::class);
 
+    // Contacts
+    Route::get('/contacts',         [App\Http\Controllers\ContactController::class, 'index']);
+    Route::get('/contacts/search',  [App\Http\Controllers\ContactController::class, 'search']);
+    Route::post('/contacts',        [App\Http\Controllers\ContactController::class, 'store']);
+    Route::post('/contacts/batch',  [App\Http\Controllers\ContactController::class, 'storeBatch']);
+    Route::delete('/contacts/{id}', [App\Http\Controllers\ContactController::class, 'destroy']);
+
     // AI Configuration
     Route::get('/ai-config',         [App\Http\Controllers\AiConfigController::class, 'show']);
     Route::put('/ai-config',         [App\Http\Controllers\AiConfigController::class, 'update']);

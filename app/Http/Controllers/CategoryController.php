@@ -16,11 +16,11 @@ class CategoryController extends Controller
     {
         $user = $request->user();
 
-        $categories = Category::where('user_id', $user->id)
+        $categories = Category::with('children')
+            ->where('user_id', $user->id)
             ->orderBy('id')
             ->get();
 
-        // Devolver array directo (compatibilidad frontend)
         return response()->json($categories);
     }
 
@@ -39,10 +39,12 @@ class CategoryController extends Controller
             'ai_instruction' => 'sometimes|nullable|string',
             'icon'           => 'sometimes|nullable|string|max:100',
             'is_system'      => 'sometimes|boolean',
+            'parent_id'      => 'sometimes|nullable|integer|exists:categories,id',
         ]);
 
         $category = Category::create([
             'user_id'        => $user->id,
+            'parent_id'      => $validated['parent_id']      ?? null,
             'key'            => $validated['key'],
             'name'           => $validated['name'],
             'description'    => $validated['description']    ?? null,

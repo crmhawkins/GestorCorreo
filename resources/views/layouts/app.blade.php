@@ -17,28 +17,14 @@
     @stack('styles')
 </head>
 <body>
-    <!-- Theme Toggle Floating Button (visible everywhere) -->
-    <button onclick="toggleTheme()" class="btn-theme-floating" title="Cambiar tema (claro/oscuro)" style="position:fixed; bottom:1.25rem; left:1.25rem; width:40px; height:40px; border-radius:50%; background:var(--surface); border:1px solid var(--border); color:var(--text); cursor:pointer; z-index:100; box-shadow:0 4px 12px rgba(0,0,0,.15); display:flex; align-items:center; justify-content:center; font-size:1.2rem; transition:all .15s;">
-        <span id="theme-icon">◐</span>
-    </button>
-
     @yield('content')
-    
     <script>
-        function updateThemeIcon() {
-            const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
-            document.getElementById('theme-icon').textContent = isDark ? '☀' : '☾';
-        }
-        
         window.toggleTheme = function() {
             const current = document.documentElement.getAttribute('data-theme') || 'dark';
             const next = current === 'dark' ? 'light' : 'dark';
             document.documentElement.setAttribute('data-theme', next);
             localStorage.setItem('theme', next);
-            updateThemeIcon();
         };
-        
-        updateThemeIcon();
     </script>
     <script src="https://cdn.quilljs.com/1.3.7/quill.min.js"></script>
     @stack('scripts')

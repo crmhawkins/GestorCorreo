@@ -14,6 +14,7 @@ class Category extends Model
 
     protected $fillable = [
         'user_id',
+        'parent_id',
         'key',
         'name',
         'description',
@@ -33,5 +34,15 @@ class Category extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function parent(): BelongsTo
+    {
+        return $this->belongsTo(Category::class, 'parent_id');
+    }
+
+    public function children(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(Category::class, 'parent_id');
     }
 }
