@@ -68,7 +68,7 @@ class Message extends Model
         'forwarded_at'    => 'datetime',
         'date'            => 'datetime',
         'created_at'      => 'datetime',
-        'imap_uid'        => 'integer',
+        'imap_uid'        => 'string',
     ];
 
     // -------------------------------------------------------------------------

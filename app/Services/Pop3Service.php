@@ -137,7 +137,53 @@ class Pop3Service
             ];
         } catch (\Throwable $e) {
             Log::error('Pop3Service (socket): Error en fetchMessage', ['msgNum' => $msgNum, 'error' => $e->getMessage()]);
+            // Tras un error, el socket puede quedar en estado inconsistente
+            // (el servidor aún enviando datos del mensaje fallido).
+            // Intentar RSET para limpiar estado; si falla, reconectar.
+            $this->recoverSocket();
             return null;
+        }
+    }
+
+    /**
+     * Intenta recuperar el socket POP3 tras un error de lectura.
+     * Envía RSET para limpiar el estado; si falla, reconecta desde cero.
+     */
+    private function recoverSocket(): void
+    {
+        try {
+            // Drenar datos residuales del socket (máx 100KB, non-blocking)
+            if (is_resource($this->socket)) {
+                stream_set_blocking($this->socket, false);
+                $drained = 0;
+                while ($drained < 102400) {
+                    $chunk = @fread($this->socket, 8192);
+                    if ($chunk === false || $chunk === '') break;
+                    $drained += strlen($chunk);
+                }
+                stream_set_blocking($this->socket, true);
+
+                // RSET restaura el estado de la sesión POP3
+                $resp = $this->sendCommand('RSET');
+                if ($this->isOk($resp)) {
+                    Log::info('Pop3Service: Socket recuperado con RSET');
+                    return;
+                }
+            }
+        } catch (\Throwable $e) {
+            Log::warning('Pop3Service: RSET falló, reconectando', ['error' => $e->getMessage()]);
+        }
+
+        // RSET falló — reconectar desde cero
+        try {
+            $this->disconnect();
+            if ($this->connect()) {
+                Log::info('Pop3Service: Reconexión exitosa tras error');
+            } else {
+                Log::error('Pop3Service: No se pudo reconectar tras error');
+            }
+        } catch (\Throwable $e) {
+            Log::error('Pop3Service: Fallo total al reconectar', ['error' => $e->getMessage()]);
         }
     }
 

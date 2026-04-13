@@ -72,11 +72,13 @@ class SyncService
     {
         try {
             if (empty($date)) {
-                return false;
+                // Sin fecha → permitir (mejor guardar que perder)
+                return true;
             }
             return Carbon::parse($date)->greaterThanOrEqualTo($this->getSyncMinDate());
         } catch (\Throwable) {
-            return false;
+            // Fecha no parseable → permitir en vez de descartar
+            return true;
         }
     }
 
