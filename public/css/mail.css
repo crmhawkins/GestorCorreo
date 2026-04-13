@@ -243,6 +243,14 @@ select.form-control option { background: var(--surface); }
 }
 .btn-icon:hover { color: var(--text-bright); background: var(--surface-hover); }
 
+.btn-folder-action {
+    background: none; border: 1px solid var(--border); color: var(--text-dim);
+    cursor: pointer; padding: .15rem .45rem; border-radius: var(--radius);
+    font-size: .65rem; transition: color .15s, background .15s, border-color .15s;
+}
+.btn-folder-action:hover { color: var(--text-bright); background: var(--surface-hover); border-color: var(--accent); }
+.btn-folder-delete:hover { color: #e55; border-color: #e55; }
+
 .sidebar-footer {
     margin-top: auto; padding: .75rem;
     border-top: 1px solid var(--border-light);

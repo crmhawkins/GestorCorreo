@@ -2,7 +2,7 @@
  * Hawkins Mail v.16 – Vanilla JS frontend
  * Calls the existing Laravel API at /api/*
  */
-console.log('%c📧 Hawkins Mail v.16', 'color:#667eea;font-size:15px;font-weight:bold');
+console.log('%c📧 Hawkins Mail v.17', 'color:#667eea;font-size:15px;font-weight:bold');
 
 /* ── State ──────────────────────────────────────────────────────── */
 const S = {
@@ -937,6 +937,7 @@ function openAccountModal(acc = null) {
     document.getElementById('acc-smtp-host').value = acc?.smtp_host || 'smtp.ionos.es';
     document.getElementById('acc-smtp-port').value = acc?.smtp_port || 465;
     document.getElementById('acc-smtp-ssl').value = acc?.smtp_ssl ? '1' : '0';
+    document.getElementById('acc-auto-classify').checked = acc ? !!acc.auto_classify : true;
     document.getElementById('acc-owner-profile').value = acc?.owner_profile || '';
     document.getElementById('acc-custom-classification-prompt').value = acc?.custom_classification_prompt || '';
     document.getElementById('acc-signature-html').value = acc?.signature_html || '';
@@ -962,6 +963,7 @@ async function saveAccount() {
         smtp_port: parseInt(document.getElementById('acc-smtp-port').value),
         ssl_verify: document.getElementById('acc-imap-ssl').value === '1',
         protocol: inferredProtocol,
+        auto_classify: document.getElementById('acc-auto-classify').checked,
         owner_profile: document.getElementById('acc-owner-profile').value.trim(),
         custom_classification_prompt: document.getElementById('acc-custom-classification-prompt').value.trim(),
         signature_html: document.getElementById('acc-signature-html').value,

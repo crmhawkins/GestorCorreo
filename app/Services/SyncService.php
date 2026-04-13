@@ -224,7 +224,9 @@ class SyncService
                         $this->saveAttachments($msgData['attachments'], $message);
                     }
 
-                    $this->classificationService->classifyMessage($message, $account);
+                    if ($account->auto_classify) {
+                        $this->classificationService->classifyMessage($message, $account);
+                    }
 
                     $newMessageIds[] = $messageId;
                     $newMessages++;
@@ -362,8 +364,10 @@ class SyncService
                         $this->saveAttachments($bodyData['attachments'], $message);
                     }
 
-                    // Clasificación automática en recepción.
-                    $this->classificationService->classifyMessage($message, $account);
+                    // Clasificación automática en recepción (solo si está activado).
+                    if ($account->auto_classify) {
+                        $this->classificationService->classifyMessage($message, $account);
+                    }
 
                     $newMessageIds[] = $messageId;
                     $newMessages++;
@@ -556,7 +560,9 @@ class SyncService
 
                     $newMessageIds[] = $messageId;
                     $newMessages++;
-                    $toClassify[] = ['message' => $message, 'account' => $account];
+                    if ($account->auto_classify) {
+                        $toClassify[] = ['message' => $message, 'account' => $account];
+                    }
                 } catch (\Throwable $e) {
                     Log::error("SyncService POP3 streaming: Error en mensaje #{$msgNum}", ['error' => $e->getMessage()]);
                 }
@@ -679,7 +685,9 @@ class SyncService
                     $newMessageIds[] = $messageId;
                     $newMessages++;
 
-                    $toClassify[] = ['message' => $message, 'account' => $account];
+                    if ($account->auto_classify) {
+                        $toClassify[] = ['message' => $message, 'account' => $account];
+                    }
                 } catch (\Throwable $e) {
                     Log::error("SyncService IMAP streaming: Error en UID {$uid}", ['error' => $e->getMessage()]);
                 }

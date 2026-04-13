@@ -41,9 +41,9 @@
         <div class="folders-section">
             <div class="accounts-header">
                 <h3>Carpetas</h3>
-                <div style="display:flex; gap:.25rem;">
-                    <button class="btn-icon" id="btn-add-folder" title="Crear carpeta personalizada">+</button>
-                    <button class="btn-icon" id="btn-delete-folder" title="Eliminar carpeta seleccionada">🗑</button>
+                <div style="display:flex; gap:.3rem;">
+                    <button class="btn-folder-action" id="btn-add-folder" title="Crear carpeta personalizada">+ Nueva</button>
+                    <button class="btn-folder-action btn-folder-delete" id="btn-delete-folder" title="Eliminar carpeta seleccionada">Eliminar</button>
                 </div>
             </div>
             <div id="folders-list">
@@ -239,7 +239,14 @@
             </div>
 
             <hr class="form-divider">
-            <p class="form-section-title">Personalización IA</p>
+            <p class="form-section-title">Inteligencia Artificial</p>
+            <div class="form-group">
+                <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer">
+                    <input type="checkbox" id="acc-auto-classify" style="width:auto;margin:0">
+                    Analizar correos con IA al sincronizar
+                </label>
+                <small style="color:var(--text-dim)">Si se desactiva, los correos se descargan pero no se clasifican automáticamente.</small>
+            </div>
             <div class="form-group">
                 <label>Tu perfil / forma de escribir</label>
                 <textarea id="acc-owner-profile" class="form-control" rows="3" placeholder="Ej: Respuestas breves, cercanas, tono profesional, español de España."></textarea>
