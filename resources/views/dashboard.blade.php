@@ -30,6 +30,10 @@
                                 <svg viewBox="0 0 20 20" fill="currentColor" style="width:14px;height:14px;flex-shrink:0"><path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z"/></svg>
                                 Contactos
                             </button>
+                            <button class="settings-dropdown-item" id="btn-manage-templates">
+                                <svg viewBox="0 0 20 20" fill="currentColor" style="width:14px;height:14px;flex-shrink:0"><path d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z"/></svg>
+                                Plantillas
+                            </button>
                             <div class="settings-dropdown-divider"></div>
                             <button class="settings-dropdown-item" id="btn-toggle-theme">
                                 <svg viewBox="0 0 20 20" fill="currentColor" style="width:14px;height:14px;flex-shrink:0"><path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"/></svg>
@@ -93,9 +97,16 @@
     <div class="main-content">
         <div class="toolbar">
             <div class="toolbar-left">
-                <div class="search-wrap">
-                    <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd"/></svg>
-                    <input type="search" id="search-input" class="search-input" placeholder="Buscar por asunto, remitente o contenido..." autocomplete="off">
+                <div class="search-toolbar">
+                    <div class="search-wrap" style="flex:1">
+                        <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd"/></svg>
+                        <input type="search" id="search-input" class="search-input" placeholder="Buscar por asunto, remitente o contenido..." autocomplete="off">
+                    </div>
+                    <button class="btn-save-search" id="btn-save-search" title="Guardar busqueda actual">+ Guardar</button>
+                    <div class="search-wrap">
+                        <button class="btn-save-search" id="btn-saved-searches" title="Busquedas guardadas">&#9776;</button>
+                        <div class="saved-searches-popover" id="saved-searches-popover"></div>
+                    </div>
                 </div>
                 <div class="toolbar-filters">
                     <input type="date" id="filter-date-from" class="form-control" style="max-width:140px" title="Desde">
@@ -109,6 +120,7 @@
                 </div>
             </div>
             <div class="toolbar-actions">
+                <button class="btn-toolbar" id="btn-toggle-conversations" title="Agrupar por conversacion">&#128172; Hilos</button>
                 <button class="btn-toolbar" id="btn-mark-read">Marcar leidos</button>
                 <button class="btn-toolbar" id="btn-empty-trash" style="display:none">Vaciar</button>
             </div>
@@ -128,6 +140,7 @@
                     <select class="btn-toolbar" id="bulk-move-select" title="Mover a">
                         <option value="">Mover a...</option>
                     </select>
+                    <button class="btn-toolbar" id="bulk-export" title="Exportar como .eml/.zip">Exportar</button>
                     <button class="btn-toolbar danger" id="bulk-spam">SPAM</button>
                     <button class="btn-toolbar danger" id="bulk-delete">Eliminar</button>
                     <button class="btn-toolbar" id="bulk-clear">&#10005;</button>
@@ -203,12 +216,37 @@
             </div>
         </div>
         <div class="modal-footer">
+            <div class="template-dropdown-wrap">
+                <button class="btn-secondary" id="btn-templates" type="button">Plantillas &#9662;</button>
+                <div class="template-dropdown" id="template-dropdown"></div>
+            </div>
             <button class="btn-secondary" id="btn-generate-compose-ai">Generar con IA</button>
             <button class="btn-secondary" id="btn-cancel-compose">Cancelar</button>
             <button class="btn-primary" id="btn-send">Enviar</button>
         </div>
     </div>
 </div>
+
+<!-- MODAL: Templates manager -->
+<div class="modal-overlay" id="modal-templates" style="display:none">
+    <div class="modal-box" style="max-width:560px">
+        <div class="modal-header">
+            <h3>Plantillas de respuesta</h3>
+            <button class="btn-icon" id="btn-close-templates">&#10005;</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-group"><label>Nombre</label><input type="text" id="tpl-new-name" class="form-control" placeholder="Ej. Acuse de recibo"></div>
+            <div class="form-group"><label>Asunto (opcional)</label><input type="text" id="tpl-new-subject" class="form-control" placeholder="Re: {asunto}"></div>
+            <div class="form-group"><label>Cuerpo HTML</label><textarea id="tpl-new-body" class="form-control" rows="5" placeholder="<p>Hola,</p><p>...</p>"></textarea></div>
+            <button class="btn-primary" id="btn-add-template">Anadir plantilla</button>
+            <hr class="form-divider">
+            <div id="templates-list-manager"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Hover preview -->
+<div class="hover-preview" id="hover-preview"></div>
 
 <!-- MODAL: Message large -->
 <div class="modal-overlay" id="modal-message-large" style="display:none">

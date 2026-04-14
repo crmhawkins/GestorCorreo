@@ -73,6 +73,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/messages/bulk/delete',          [App\Http\Controllers\MessageController::class, 'bulkDelete']);
     Route::post('/messages/bulk/classify',        [App\Http\Controllers\MessageController::class, 'bulkClassify']);
     Route::post('/messages/bulk/flags',           [App\Http\Controllers\MessageController::class, 'bulkFlags']);
+    Route::post('/messages/bulk/export',          [App\Http\Controllers\MessageController::class, 'bulkExport']);
     Route::put('/messages/{id}/classify',         [App\Http\Controllers\ClassifyController::class, 'updateLabel']);
     Route::get('/classifications/{messageId}',    [App\Http\Controllers\ClassifyController::class, 'show']);
 

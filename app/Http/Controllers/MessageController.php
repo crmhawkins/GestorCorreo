@@ -393,6 +393,145 @@ class MessageController extends Controller
     }
 
     /**
+     * POST /messages/bulk/export
+     * Exporta uno o varios mensajes como .eml (single) o .zip (multiple).
+     */
+    public function bulkExport(Request $request)
+    {
+        $user = $request->user();
+        $validated = $request->validate([
+            'ids'   => 'required|array|min:1|max:100',
+            'ids.*' => 'string',
+        ]);
+
+        $accountIds = Account::where('user_id', $user->id)
+            ->where('is_deleted', false)
+            ->pluck('id');
+
+        $messages = Message::with('attachments')
+            ->whereIn('account_id', $accountIds)
+            ->whereIn('id', $validated['ids'])
+            ->get();
+
+        if ($messages->isEmpty()) {
+            return response()->json(['error' => 'No se encontraron mensajes.'], 404);
+        }
+
+        if ($messages->count() === 1) {
+            $msg = $messages->first();
+            $eml = $this->buildEml($msg);
+            $filename = $this->safeFilename($msg->subject ?: 'mensaje') . '.eml';
+            return response($eml)
+                ->header('Content-Type', 'message/rfc822')
+                ->header('Content-Disposition', 'attachment; filename="' . $filename . '"');
+        }
+
+        // Multiple → ZIP
+        if (!class_exists(\ZipArchive::class)) {
+            return response()->json(['error' => 'ZipArchive no disponible en el servidor.'], 500);
+        }
+
+        $tmpFile = tempnam(sys_get_temp_dir(), 'export_');
+        $zip = new \ZipArchive();
+        if ($zip->open($tmpFile, \ZipArchive::OVERWRITE) !== true) {
+            return response()->json(['error' => 'No se pudo crear el ZIP.'], 500);
+        }
+
+        $usedNames = [];
+        foreach ($messages as $msg) {
+            $base = $this->safeFilename($msg->subject ?: 'mensaje') . '_' . substr($msg->id, 0, 8);
+            $name = $base . '.eml';
+            $i = 1;
+            while (isset($usedNames[$name])) { $name = $base . '_' . (++$i) . '.eml'; }
+            $usedNames[$name] = true;
+            $zip->addFromString($name, $this->buildEml($msg));
+        }
+        $zip->close();
+
+        return response()->download($tmpFile, 'correos_' . date('Ymd_His') . '.zip', [
+            'Content-Type' => 'application/zip',
+        ])->deleteFileAfterSend(true);
+    }
+
+    private function safeFilename(string $name): string
+    {
+        $name = preg_replace('/[^\p{L}\p{N}_\-\. ]/u', '_', $name) ?? 'mensaje';
+        $name = trim(preg_replace('/\s+/', '_', $name));
+        return mb_substr($name, 0, 80) ?: 'mensaje';
+    }
+
+    private function buildEml(Message $msg): string
+    {
+        $from = $msg->from_name
+            ? $msg->from_name . ' <' . $msg->from_email . '>'
+            : ($msg->from_email ?: 'unknown@local');
+        $to   = $this->formatAddressList($msg->to_addresses);
+        $cc   = $this->formatAddressList($msg->cc_addresses);
+        $date = $msg->date ? \Carbon\Carbon::parse($msg->date)->format('r') : date('r');
+        $subject = $this->encodeMimeHeader((string) ($msg->subject ?? ''));
+        $hasHtml = !empty($msg->body_html);
+        $bodyText = (string) ($msg->body_text ?? '');
+        $bodyHtml = (string) ($msg->body_html ?? '');
+
+        $eml  = "From: " . $this->encodeMimeHeader($from) . "\r\n";
+        $eml .= "To: " . ($to ?: 'unknown@local') . "\r\n";
+        if ($cc) $eml .= "Cc: " . $cc . "\r\n";
+        $eml .= "Subject: " . $subject . "\r\n";
+        $eml .= "Date: " . $date . "\r\n";
+        $eml .= "Message-ID: <" . ($msg->message_id ?: $msg->id) . ">\r\n";
+        $eml .= "MIME-Version: 1.0\r\n";
+
+        if ($hasHtml && $bodyText !== '') {
+            $boundary = 'hawkins_' . bin2hex(random_bytes(8));
+            $eml .= "Content-Type: multipart/alternative; boundary=\"{$boundary}\"\r\n\r\n";
+            $eml .= "--{$boundary}\r\n";
+            $eml .= "Content-Type: text/plain; charset=UTF-8\r\n";
+            $eml .= "Content-Transfer-Encoding: 8bit\r\n\r\n";
+            $eml .= $bodyText . "\r\n\r\n";
+            $eml .= "--{$boundary}\r\n";
+            $eml .= "Content-Type: text/html; charset=UTF-8\r\n";
+            $eml .= "Content-Transfer-Encoding: 8bit\r\n\r\n";
+            $eml .= $bodyHtml . "\r\n\r\n";
+            $eml .= "--{$boundary}--\r\n";
+        } elseif ($hasHtml) {
+            $eml .= "Content-Type: text/html; charset=UTF-8\r\n";
+            $eml .= "Content-Transfer-Encoding: 8bit\r\n\r\n";
+            $eml .= $bodyHtml;
+        } else {
+            $eml .= "Content-Type: text/plain; charset=UTF-8\r\n";
+            $eml .= "Content-Transfer-Encoding: 8bit\r\n\r\n";
+            $eml .= $bodyText;
+        }
+        return $eml;
+    }
+
+    private function formatAddressList($raw): string
+    {
+        if (empty($raw)) return '';
+        $list = is_string($raw) ? json_decode($raw, true) : $raw;
+        if (!is_array($list)) return '';
+        $parts = [];
+        foreach ($list as $a) {
+            if (is_string($a)) $parts[] = $a;
+            elseif (is_array($a)) {
+                $email = $a['email'] ?? '';
+                $name  = $a['name']  ?? '';
+                if (!$email) continue;
+                $parts[] = $name ? $this->encodeMimeHeader($name) . " <{$email}>" : $email;
+            }
+        }
+        return implode(', ', $parts);
+    }
+
+    private function encodeMimeHeader(string $value): string
+    {
+        if (preg_match('/[^\x20-\x7E]/', $value)) {
+            return '=?UTF-8?B?' . base64_encode($value) . '?=';
+        }
+        return $value;
+    }
+
+    /**
      * POST /messages/bulk/flags
      * Actualiza is_read/is_starred de varios mensajes a la vez.
      */

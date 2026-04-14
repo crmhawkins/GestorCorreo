@@ -29,6 +29,12 @@ const S = {
     selectedIds: new Set(),
     lastClickedId: null,
     undoTimer: null,
+    conversationView: localStorage.getItem('conversation_view') === '1',
+    expandedThreads: new Set(),
+    zenMode: false,
+    lastUnreadCount: 0,
+    notificationsEnabled: false,
+    hoverTimer: null,
 };
 
 /* ── Auth guard ─────────────────────────────────────────────────── */
@@ -232,6 +238,12 @@ async function loadUnreadCounts() {
         const n = Number(c[k] || c?.labels?.[k] || 0);
         el.textContent = n > 0 ? String(n) : '';
     });
+    // F: notify on new mail
+    const total = Number(c.all || 0);
+    if (S.lastUnreadCount > 0 && total > S.lastUnreadCount) {
+        notifyNewMessages(total, S.lastUnreadCount);
+    }
+    S.lastUnreadCount = total;
 }
 
 /* ── Render: messages ──────────────────────────────────────────── */
@@ -242,15 +254,30 @@ function renderMessages() {
         renderBulkBar();
         return;
     }
-    container.innerHTML = S.messages.map(m => `
-        <div class="message-item ${m.is_read ? 'read' : 'unread'} ${S.activeMessage?.id === m.id ? 'active' : ''} ${S.selectedIds.has(m.id) ? 'selected' : ''}"
-             data-id="${m.id}" draggable="true"
+
+    const renderRow = (m, opts = {}) => {
+        const isHead = opts.isHead;
+        const isChild = opts.isChild;
+        const count = opts.count || 1;
+        const threadKey = opts.key || '';
+        const classes = [
+            'message-item',
+            m.is_read ? 'read' : 'unread',
+            S.activeMessage?.id === m.id ? 'active' : '',
+            S.selectedIds.has(m.id) ? 'selected' : '',
+            isHead ? 'thread-head' : '',
+            isHead && S.expandedThreads.has(threadKey) ? 'expanded' : '',
+            isChild ? 'thread-child' : '',
+        ].filter(Boolean).join(' ');
+        return `
+        <div class="${classes}" data-id="${m.id}" ${isHead ? `data-thread="${escHtml(threadKey)}"` : ''} draggable="true"
              ondragstart="onMessageDragStart(event,'${m.id}')">
             <input type="checkbox" class="msg-checkbox" data-id="${m.id}" ${S.selectedIds.has(m.id) ? 'checked' : ''}>
             <div class="message-from">
                 ${m.is_read ? '' : '<span style="color:var(--accent);font-size:.5rem">&#9679;</span>'}
                 ${escHtml(isSentLikeMessage(m) ? ('Para: ' + (getPrimaryTo(m) || '')) : (m.from_name || m.from_email || ''))}
                 ${badge(m.classification_label)}
+                ${count > 1 ? `<span class="thread-count">${count}</span>` : ''}
             </div>
             <div class="message-date">${fmtDate(m.date)}</div>
             <div class="message-subject">${escHtml(m.subject || '(Sin asunto)')}</div>
@@ -261,8 +288,15 @@ function renderMessages() {
                 <button class="btn-star ${m.is_starred ? 'starred' : ''}" onclick="toggleStar(event,'${m.id}',${m.is_starred})"
                     title="${m.is_starred ? 'Quitar estrella' : 'Destacar'}">${m.is_starred ? '&#9733;' : '&#9734;'}</button>
             </div>
-        </div>
-    `).join('');
+        </div>`;
+    };
+
+    if (S.conversationView) {
+        const grouped = groupConversations(S.messages);
+        container.innerHTML = grouped.map(g => renderRow(g.msg, { isHead: g.isHead, isChild: g.isChild, count: g.count, key: g.key })).join('');
+    } else {
+        container.innerHTML = S.messages.map(m => renderRow(m)).join('');
+    }
 
     // Bind checkbox clicks (with shift-range support)
     container.querySelectorAll('.msg-checkbox').forEach(cb => {
@@ -276,6 +310,11 @@ function renderMessages() {
     container.querySelectorAll('.message-item').forEach(row => {
         row.addEventListener('click', e => {
             if (e.target.closest('.msg-checkbox') || e.target.closest('.btn-star')) return;
+            // Thread head → toggle expand instead of opening
+            if (S.conversationView && row.classList.contains('thread-head') && row.dataset.thread) {
+                toggleThread(row.dataset.thread);
+                return;
+            }
             openMessage(row.dataset.id);
         });
         row.addEventListener('dblclick', e => {
@@ -473,6 +512,7 @@ async function renderViewer(msg) {
                 <button class="btn-toolbar" onclick="replyTo('forward')">&#8618; Reenviar</button>
                 <button class="btn-toolbar danger" onclick="markAsSpam('${m.id}')">Marcar SPAM</button>
                 <button class="btn-toolbar" onclick="toggleRead('${m.id}', ${m.is_read})">${m.is_read ? 'No leido' : 'Leido'}</button>
+                <button class="btn-toolbar" onclick="toggleZenMode()" title="Modo zen">&#127769; Zen</button>
                 <button class="btn-toolbar danger" onclick="deleteMsg('${m.id}')">Eliminar</button>
             </div>
             <div class="viewer-body">${bodyHtml}</div>
@@ -1159,6 +1199,329 @@ async function markAllRead() {
     else toast('Error', 'error');
 }
 
+/* ── C: Hover preview ──────────────────────────────────────────── */
+function setupHoverPreview() {
+    const preview = document.getElementById('hover-preview');
+    if (!preview) return;
+    const container = document.getElementById('messages-container');
+
+    container.addEventListener('mouseover', e => {
+        const item = e.target.closest('.message-item');
+        if (!item) return;
+        const id = item.dataset.id;
+        if (!id) return;
+        const msg = S.messages.find(m => m.id === id);
+        if (!msg) return;
+
+        clearTimeout(S.hoverTimer);
+        S.hoverTimer = setTimeout(() => {
+            preview.style.display = 'block';
+            preview.innerHTML = `
+                <div class="hp-subject">${escHtml(msg.subject || '(Sin asunto)')}</div>
+                <div class="hp-from">${escHtml(msg.from_name || msg.from_email || '')}</div>
+                <div class="hp-snippet">${escHtml((msg.snippet || '').slice(0, 280))}</div>`;
+            const rect = item.getBoundingClientRect();
+            const px = Math.min(rect.right + 12, window.innerWidth - 440);
+            const py = Math.min(rect.top, window.innerHeight - 200);
+            preview.style.left = px + 'px';
+            preview.style.top  = py + 'px';
+            requestAnimationFrame(() => preview.classList.add('visible'));
+        }, 600);
+    });
+    container.addEventListener('mouseout', e => {
+        if (!e.target.closest('.message-item')) return;
+        clearTimeout(S.hoverTimer);
+        preview.classList.remove('visible');
+        setTimeout(() => { if (!preview.classList.contains('visible')) preview.style.display = 'none'; }, 150);
+    });
+}
+
+/* ── D: Saved searches ─────────────────────────────────────────── */
+function getSavedSearches() {
+    try { return JSON.parse(localStorage.getItem('saved_searches') || '[]'); }
+    catch { return []; }
+}
+function setSavedSearches(arr) { localStorage.setItem('saved_searches', JSON.stringify(arr)); }
+
+function saveCurrentSearch() {
+    const name = (window.prompt('Nombre de la busqueda guardada:', '') || '').trim();
+    if (!name) return;
+    const list = getSavedSearches();
+    list.push({
+        name,
+        search: S.search,
+        filter: S.filter,
+        dateFrom: S.dateFrom,
+        dateTo: S.dateTo,
+        readFilter: S.readFilter,
+    });
+    setSavedSearches(list);
+    toast('Busqueda guardada', 'success');
+}
+
+function renderSavedSearchesPopover() {
+    const pop = document.getElementById('saved-searches-popover');
+    const list = getSavedSearches();
+    if (!list.length) {
+        pop.innerHTML = '<div class="saved-searches-empty">Sin busquedas guardadas</div>';
+        return;
+    }
+    pop.innerHTML = list.map((s, i) => `
+        <div class="saved-search-item" data-idx="${i}">
+            <span>${escHtml(s.name)}</span>
+            <button class="ss-delete" data-del="${i}">&times;</button>
+        </div>
+    `).join('');
+    pop.querySelectorAll('.saved-search-item').forEach(item => {
+        item.addEventListener('click', e => {
+            if (e.target.classList.contains('ss-delete')) return;
+            const s = getSavedSearches()[parseInt(item.dataset.idx)];
+            applySavedSearch(s);
+            pop.classList.remove('open');
+        });
+    });
+    pop.querySelectorAll('.ss-delete').forEach(btn => {
+        btn.addEventListener('click', e => {
+            e.stopPropagation();
+            const i = parseInt(btn.dataset.del);
+            const list = getSavedSearches();
+            list.splice(i, 1);
+            setSavedSearches(list);
+            renderSavedSearchesPopover();
+        });
+    });
+}
+
+function applySavedSearch(s) {
+    if (!s) return;
+    S.search = s.search || '';
+    S.filter = s.filter || 'all';
+    S.dateFrom = s.dateFrom || '';
+    S.dateTo = s.dateTo || '';
+    S.readFilter = s.readFilter || '';
+    document.getElementById('search-input').value = S.search;
+    document.getElementById('filter-date-from').value = S.dateFrom;
+    document.getElementById('filter-date-to').value = S.dateTo;
+    document.getElementById('filter-read').value = S.readFilter;
+    renderFolders();
+    loadMessages(true);
+}
+
+/* ── E: Conversation grouping ──────────────────────────────────── */
+function normalizeSubjectForThread(s) {
+    return String(s || '')
+        .replace(/^(\s*(re|fwd?|fw|rv)\s*:\s*)+/i, '')
+        .trim()
+        .toLowerCase();
+}
+
+function groupConversations(messages) {
+    const groups = new Map();
+    for (const m of messages) {
+        const key = normalizeSubjectForThread(m.subject) + '|' + (m.from_email || '');
+        // Group by subject only (ignore from) so reply chains stay together
+        const k = normalizeSubjectForThread(m.subject);
+        if (!groups.has(k)) groups.set(k, []);
+        groups.get(k).push(m);
+    }
+    // Convert to ordered list with thread heads
+    const result = [];
+    const seen = new Set();
+    for (const m of messages) {
+        const k = normalizeSubjectForThread(m.subject);
+        if (seen.has(k)) continue;
+        seen.add(k);
+        const all = groups.get(k);
+        if (all.length === 1) {
+            result.push({ msg: all[0], isHead: false, count: 1, all });
+        } else {
+            result.push({ msg: all[0], isHead: true, count: all.length, all, key: k });
+            if (S.expandedThreads.has(k)) {
+                for (let i = 1; i < all.length; i++) result.push({ msg: all[i], isChild: true, count: 1, all: [all[i]] });
+            }
+        }
+    }
+    return result;
+}
+
+function toggleThread(key) {
+    if (S.expandedThreads.has(key)) S.expandedThreads.delete(key);
+    else S.expandedThreads.add(key);
+    renderMessages();
+}
+window.toggleThread = toggleThread;
+
+function toggleConversationView() {
+    S.conversationView = !S.conversationView;
+    localStorage.setItem('conversation_view', S.conversationView ? '1' : '0');
+    document.getElementById('btn-toggle-conversations').classList.toggle('primary', S.conversationView);
+    renderMessages();
+}
+
+/* ── F: Browser notifications ─────────────────────────────────── */
+async function setupNotifications() {
+    if (!('Notification' in window)) return;
+    if (Notification.permission === 'granted') { S.notificationsEnabled = true; return; }
+    if (Notification.permission === 'default') {
+        try {
+            const p = await Notification.requestPermission();
+            S.notificationsEnabled = (p === 'granted');
+        } catch {}
+    }
+}
+
+function notifyNewMessages(newCount, prevCount) {
+    if (!S.notificationsEnabled || newCount <= prevCount) return;
+    const delta = newCount - prevCount;
+    try {
+        const n = new Notification('Hawkins Mail', {
+            body: `${delta} mensaje(s) nuevo(s)`,
+            tag: 'hawkins-mail-new',
+        });
+        n.onclick = () => { window.focus(); S.filter = 'all'; loadMessages(true); n.close(); };
+    } catch {}
+}
+
+/* ── G: Zen mode ───────────────────────────────────────────────── */
+window.toggleZenMode = function() {
+    S.zenMode = !S.zenMode;
+    document.getElementById('app').classList.toggle('zen-mode', S.zenMode);
+    let exitBtn = document.getElementById('btn-zen-exit');
+    if (S.zenMode) {
+        if (!exitBtn) {
+            exitBtn = document.createElement('button');
+            exitBtn.id = 'btn-zen-exit';
+            exitBtn.className = 'btn-zen-exit';
+            exitBtn.textContent = 'Salir del modo zen (Esc)';
+            exitBtn.addEventListener('click', window.toggleZenMode);
+            document.body.appendChild(exitBtn);
+        }
+    } else if (exitBtn) {
+        exitBtn.remove();
+    }
+};
+
+/* ── H: Bulk export ────────────────────────────────────────────── */
+async function bulkExport() {
+    const ids = Array.from(S.selectedIds);
+    if (!ids.length) return;
+    if (ids.length > 100) { toast('Maximo 100 mensajes por exportacion', 'error'); return; }
+
+    const btn = document.getElementById('bulk-export');
+    btn.disabled = true;
+    const original = btn.textContent;
+    btn.textContent = 'Exportando...';
+
+    try {
+        const res = await fetch('/api/messages/bulk/export', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${S.token}` },
+            body: JSON.stringify({ ids }),
+        });
+        if (!res.ok) { toast('Error al exportar', 'error'); return; }
+        const blob = await res.blob();
+        const cd = res.headers.get('Content-Disposition') || '';
+        const fname = (cd.match(/filename="?([^"]+)"?/) || [])[1] || (ids.length === 1 ? 'mensaje.eml' : 'correos.zip');
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a'); a.href = url; a.download = fname; a.click();
+        URL.revokeObjectURL(url);
+        toast(`${ids.length} exportado(s)`, 'success');
+    } catch (e) {
+        toast('Error: ' + e.message, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = original;
+    }
+}
+
+/* ── I: Reply templates ────────────────────────────────────────── */
+function getTemplates() {
+    try { return JSON.parse(localStorage.getItem('reply_templates') || '[]'); }
+    catch { return []; }
+}
+function setTemplates(arr) { localStorage.setItem('reply_templates', JSON.stringify(arr)); }
+
+function renderTemplateDropdown() {
+    const dd = document.getElementById('template-dropdown');
+    const list = getTemplates();
+    if (!list.length) {
+        dd.innerHTML = '<div class="template-empty">Sin plantillas. Crea una desde Ajustes &rarr; Plantillas</div>';
+        return;
+    }
+    dd.innerHTML = list.map((t, i) => `
+        <div class="template-item" data-idx="${i}">
+            <span>${escHtml(t.name)}</span>
+        </div>
+    `).join('');
+    dd.querySelectorAll('.template-item').forEach(el => {
+        el.addEventListener('click', () => {
+            const t = getTemplates()[parseInt(el.dataset.idx)];
+            applyTemplate(t);
+            dd.classList.remove('open');
+        });
+    });
+}
+
+function applyTemplate(t) {
+    if (!t) return;
+    if (t.subject) {
+        const cur = document.getElementById('compose-subject').value;
+        document.getElementById('compose-subject').value = t.subject.replace('{asunto}', cur || '');
+    }
+    if (t.body && _quill) {
+        const current = _quill.root.innerHTML;
+        _quill.root.innerHTML = t.body + (current && current !== '<p><br></p>' ? '<br>' + current : '');
+    }
+}
+
+function openTemplatesModal() {
+    renderTemplatesList();
+    document.getElementById('modal-templates').style.display = 'flex';
+}
+
+function renderTemplatesList() {
+    const list = getTemplates();
+    const cont = document.getElementById('templates-list-manager');
+    if (!list.length) {
+        cont.innerHTML = '<p style="color:var(--text-dim);font-size:.78rem;text-align:center;padding:.75rem 0">Sin plantillas creadas</p>';
+        return;
+    }
+    cont.innerHTML = list.map((t, i) => `
+        <div class="template-edit-row">
+            <div class="te-name">${escHtml(t.name)}</div>
+            <div class="te-body">${escHtml((t.body || '').replace(/<[^>]+>/g, ' ').slice(0, 100))}</div>
+            <div class="te-actions">
+                <button class="btn-toolbar danger" data-del="${i}">Eliminar</button>
+            </div>
+        </div>
+    `).join('');
+    cont.querySelectorAll('[data-del]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const i = parseInt(btn.dataset.del);
+            const list = getTemplates();
+            list.splice(i, 1);
+            setTemplates(list);
+            renderTemplatesList();
+            toast('Plantilla eliminada', 'success');
+        });
+    });
+}
+
+function addTemplate() {
+    const name = document.getElementById('tpl-new-name').value.trim();
+    const subject = document.getElementById('tpl-new-subject').value.trim();
+    const body = document.getElementById('tpl-new-body').value.trim();
+    if (!name || !body) { toast('Nombre y cuerpo son obligatorios', 'error'); return; }
+    const list = getTemplates();
+    list.push({ name, subject, body });
+    setTemplates(list);
+    document.getElementById('tpl-new-name').value = '';
+    document.getElementById('tpl-new-subject').value = '';
+    document.getElementById('tpl-new-body').value = '';
+    renderTemplatesList();
+    toast('Plantilla guardada', 'success');
+}
+
 /* ── Mail password modal ───────────────────────────────────────── */
 function promptMailPassword() {
     return new Promise(resolve => {
@@ -1310,10 +1673,51 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('bulk-delete').addEventListener('click', bulkDelete);
     document.getElementById('bulk-spam').addEventListener('click', bulkMarkSpam);
     document.getElementById('bulk-mark-read').addEventListener('click', bulkMarkRead);
+    document.getElementById('bulk-export').addEventListener('click', bulkExport);
     document.getElementById('bulk-clear').addEventListener('click', clearSelection);
     document.getElementById('bulk-move-select').addEventListener('change', e => {
         if (e.target.value) { bulkMove(e.target.value); e.target.value = ''; }
     });
+
+    // D: Saved searches
+    document.getElementById('btn-save-search').addEventListener('click', saveCurrentSearch);
+    const ssBtn = document.getElementById('btn-saved-searches');
+    const ssPop = document.getElementById('saved-searches-popover');
+    ssBtn.addEventListener('click', e => {
+        e.stopPropagation();
+        renderSavedSearchesPopover();
+        ssPop.classList.toggle('open');
+    });
+    document.addEventListener('click', () => ssPop.classList.remove('open'));
+    ssPop.addEventListener('click', e => e.stopPropagation());
+
+    // E: Conversation view toggle
+    document.getElementById('btn-toggle-conversations').addEventListener('click', toggleConversationView);
+    if (S.conversationView) document.getElementById('btn-toggle-conversations').classList.add('primary');
+
+    // I: Templates
+    document.getElementById('btn-manage-templates').addEventListener('click', () => {
+        document.getElementById('settings-dropdown').classList.remove('open');
+        openTemplatesModal();
+    });
+    document.getElementById('btn-close-templates').addEventListener('click', () => { document.getElementById('modal-templates').style.display = 'none'; });
+    document.getElementById('btn-add-template').addEventListener('click', addTemplate);
+
+    const tplBtn = document.getElementById('btn-templates');
+    const tplDD = document.getElementById('template-dropdown');
+    tplBtn.addEventListener('click', e => {
+        e.stopPropagation();
+        renderTemplateDropdown();
+        tplDD.classList.toggle('open');
+    });
+    document.addEventListener('click', () => tplDD.classList.remove('open'));
+    tplDD.addEventListener('click', e => e.stopPropagation());
+
+    // C: Hover preview
+    setupHoverPreview();
+
+    // F: Notifications
+    setupNotifications();
 
     // Select-all checkbox
     document.getElementById('select-all-checkbox').addEventListener('click', e => {
@@ -1328,8 +1732,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
         if (e.target.isContentEditable) return;
 
-        // Esc clears selection or closes viewer
+        // Esc clears selection / closes viewer / exits zen mode
         if (e.key === 'Escape') {
+            if (S.zenMode) { window.toggleZenMode(); return; }
             if (S.selectedIds.size > 0) clearSelection();
             else if (S.activeMessage) closeViewer();
             return;

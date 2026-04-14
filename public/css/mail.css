@@ -410,6 +410,120 @@ select.form-control option { background: var(--surface); }
     display: flex; align-items: center; gap: .3rem; margin-top: .15rem;
 }
 
+/* ── Hover preview (C) ────────────────────────────────────────── */
+.hover-preview {
+    position: fixed; z-index: 1500; display: none;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius-lg); padding: .9rem 1.1rem;
+    box-shadow: var(--shadow-lg); max-width: 420px;
+    font-size: .78rem; color: var(--text); line-height: 1.55;
+    pointer-events: none; opacity: 0;
+    transition: opacity .12s ease;
+}
+.hover-preview.visible { opacity: 1; }
+.hover-preview .hp-subject { font-weight: 600; color: var(--text-bright); margin-bottom: .35rem; font-size: .82rem; }
+.hover-preview .hp-from { color: var(--text-dim); font-size: .72rem; margin-bottom: .55rem; }
+.hover-preview .hp-snippet { color: var(--text); font-size: .75rem; max-height: 90px; overflow: hidden; }
+
+/* ── Saved searches (D) ──────────────────────────────────────── */
+.saved-searches-popover {
+    position: absolute; top: calc(100% + .35rem); left: 0;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: .35rem 0;
+    min-width: 240px; box-shadow: var(--shadow-md); z-index: 100;
+    display: none; max-height: 280px; overflow-y: auto;
+}
+.saved-searches-popover.open { display: block; }
+.saved-search-item {
+    display: flex; align-items: center; gap: .5rem;
+    padding: .4rem .75rem; font-size: .75rem; color: var(--text);
+    cursor: pointer; transition: background .1s;
+}
+.saved-search-item:hover { background: var(--accent-muted); }
+.saved-search-item span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.saved-search-item .ss-delete {
+    background: none; border: none; color: var(--text-dim);
+    cursor: pointer; padding: .15rem .3rem; font-size: .85rem; line-height: 1;
+}
+.saved-search-item .ss-delete:hover { color: var(--danger); }
+.saved-searches-empty { padding: .75rem; font-size: .73rem; color: var(--text-dim); text-align: center; }
+.btn-save-search {
+    background: var(--surface); border: 1px solid var(--border);
+    color: var(--text-dim); padding: .3rem .55rem; border-radius: var(--radius);
+    font-size: .7rem; cursor: pointer; font-family: inherit; transition: all .12s;
+}
+.btn-save-search:hover { color: var(--accent); border-color: var(--accent); }
+.search-wrap { position: relative; }
+.search-toolbar { display: flex; gap: .35rem; align-items: center; max-width: 480px; }
+
+/* ── Conversation grouping (E) ───────────────────────────────── */
+.message-item.thread-head .message-from::before {
+    content: '▸ ';
+    color: var(--text-dim);
+    font-size: .65rem;
+    margin-right: .15rem;
+}
+.message-item.thread-head.expanded .message-from::before { content: '▾ '; }
+.thread-count {
+    background: var(--accent-muted); color: var(--accent);
+    padding: .05rem .35rem; border-radius: 8px;
+    font-size: .6rem; font-weight: 600; margin-left: .25rem;
+}
+.message-item.thread-child {
+    padding-left: 2rem;
+    background: var(--bg);
+    border-left: 2px solid var(--accent-muted);
+}
+
+/* ── Zen mode (G) ────────────────────────────────────────────── */
+.mail-app.zen-mode .sidebar { display: none; }
+.mail-app.zen-mode .toolbar { display: none; }
+.mail-app.zen-mode .list-pane { display: none; }
+.mail-app.zen-mode .detail-pane { background: var(--bg); }
+.mail-app.zen-mode .message-viewer-wrap { padding: 2.5rem 5rem; max-width: 900px; margin: 0 auto; }
+.btn-zen-exit {
+    position: fixed; top: 1rem; right: 1rem; z-index: 100;
+    background: var(--surface); border: 1px solid var(--border);
+    color: var(--text); padding: .4rem .85rem; border-radius: var(--radius);
+    font-size: .75rem; cursor: pointer; font-family: inherit;
+    box-shadow: var(--shadow-md);
+}
+.btn-zen-exit:hover { background: var(--surface-hover); border-color: var(--accent); color: var(--accent); }
+
+/* ── Templates dropdown (I) ──────────────────────────────────── */
+.template-dropdown-wrap { position: relative; display: inline-block; }
+.template-dropdown {
+    position: absolute; bottom: 100%; right: 0; margin-bottom: .35rem;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: .35rem 0;
+    min-width: 220px; box-shadow: var(--shadow-md); z-index: 100;
+    display: none; max-height: 260px; overflow-y: auto;
+}
+.template-dropdown.open { display: block; }
+.template-item {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: .45rem .75rem; font-size: .75rem; color: var(--text);
+    cursor: pointer; transition: background .1s;
+}
+.template-item:hover { background: var(--accent-muted); }
+.template-item span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.template-item .tpl-delete {
+    background: none; border: none; color: var(--text-dim);
+    cursor: pointer; padding: 0 .25rem; font-size: .85rem; line-height: 1; opacity: 0;
+}
+.template-item:hover .tpl-delete { opacity: 1; }
+.template-item .tpl-delete:hover { color: var(--danger); }
+.template-empty { padding: .65rem; font-size: .72rem; color: var(--text-dim); text-align: center; }
+
+/* Templates manager modal */
+.template-edit-row {
+    display: flex; flex-direction: column; gap: .25rem;
+    padding: .5rem 0; border-bottom: 1px solid var(--border-light);
+}
+.template-edit-row .te-name { font-weight: 600; color: var(--text-bright); font-size: .8rem; }
+.template-edit-row .te-body { font-size: .72rem; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.template-edit-row .te-actions { display: flex; gap: .35rem; margin-top: .3rem; }
+
 /* ── Undo bar ─────────────────────────────────────────────────── */
 .undo-bar {
     position: fixed; bottom: 1.5rem; left: 50%;
