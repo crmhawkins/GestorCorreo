@@ -116,6 +116,22 @@
 
         <div class="content-split-pane">
             <div class="list-pane" id="list-pane">
+                <div class="list-select-bar">
+                    <input type="checkbox" id="select-all-checkbox" title="Seleccionar todos">
+                    <span id="select-all-label">Seleccionar todo</span>
+                </div>
+                <div class="bulk-bar" id="bulk-bar">
+                    <span class="bulk-bar-count" id="bulk-bar-count">0</span>
+                    <span>seleccionados</span>
+                    <span class="bulk-bar-spacer"></span>
+                    <button class="btn-toolbar" id="bulk-mark-read">Leidos</button>
+                    <select class="btn-toolbar" id="bulk-move-select" title="Mover a">
+                        <option value="">Mover a...</option>
+                    </select>
+                    <button class="btn-toolbar danger" id="bulk-spam">SPAM</button>
+                    <button class="btn-toolbar danger" id="bulk-delete">Eliminar</button>
+                    <button class="btn-toolbar" id="bulk-clear">&#10005;</button>
+                </div>
                 <div id="messages-container"></div>
             </div>
             <div class="detail-pane" id="detail-pane" style="display:none">

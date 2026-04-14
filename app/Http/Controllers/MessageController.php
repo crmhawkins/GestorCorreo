@@ -308,4 +308,120 @@ class MessageController extends Controller
     {
         return $this->updateFlags($request, $id);
     }
+
+    /**
+     * POST /messages/bulk/delete
+     * Elimina varios mensajes a la vez (solo los del usuario).
+     */
+    public function bulkDelete(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $validated = $request->validate([
+            'ids'   => 'required|array|min:1|max:500',
+            'ids.*' => 'string',
+        ]);
+
+        $accountIds = Account::where('user_id', $user->id)
+            ->where('is_deleted', false)
+            ->pluck('id');
+
+        $messages = Message::with('attachments', 'classification')
+            ->whereIn('account_id', $accountIds)
+            ->whereIn('id', $validated['ids'])
+            ->get();
+
+        $deleted = 0;
+        foreach ($messages as $message) {
+            foreach ($message->attachments as $attachment) {
+                if ($attachment->local_path) {
+                    try {
+                        $path = str_replace('public/', '', $attachment->local_path);
+                        Storage::disk('public')->delete($path);
+                    } catch (\Throwable) {}
+                }
+            }
+            $message->attachments()->delete();
+            if ($message->classification) {
+                $message->classification()->delete();
+            }
+            $message->delete();
+            $deleted++;
+        }
+
+        return response()->json(['deleted' => $deleted]);
+    }
+
+    /**
+     * POST /messages/bulk/classify
+     * Mueve varios mensajes a una etiqueta/carpeta a la vez.
+     */
+    public function bulkClassify(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $validated = $request->validate([
+            'ids'                 => 'required|array|min:1|max:500',
+            'ids.*'               => 'string',
+            'classification_label' => 'required|string|max:100',
+        ]);
+
+        $label = $validated['classification_label'];
+        $accountIds = Account::where('user_id', $user->id)
+            ->where('is_deleted', false)
+            ->pluck('id');
+
+        $messages = Message::whereIn('account_id', $accountIds)
+            ->whereIn('id', $validated['ids'])
+            ->get();
+
+        $updated = 0;
+        foreach ($messages as $message) {
+            \App\Models\Classification::updateOrCreate(
+                ['message_id' => $message->id],
+                [
+                    'final_label' => $label,
+                    'decided_by'  => 'manual',
+                    'final_reason' => 'Etiquetado manualmente (bulk)',
+                    'decided_at'  => now(),
+                ]
+            );
+            $message->folder = (strtolower($label) === 'interesantes') ? 'INBOX' : $label;
+            $message->save();
+            $updated++;
+        }
+
+        return response()->json(['updated' => $updated]);
+    }
+
+    /**
+     * POST /messages/bulk/flags
+     * Actualiza is_read/is_starred de varios mensajes a la vez.
+     */
+    public function bulkFlags(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $validated = $request->validate([
+            'ids'        => 'required|array|min:1|max:500',
+            'ids.*'      => 'string',
+            'is_read'    => 'sometimes|boolean',
+            'is_starred' => 'sometimes|boolean',
+        ]);
+
+        $accountIds = Account::where('user_id', $user->id)
+            ->where('is_deleted', false)
+            ->pluck('id');
+
+        $updates = [];
+        if ($request->has('is_read'))    $updates['is_read']    = (bool) $validated['is_read'];
+        if ($request->has('is_starred')) $updates['is_starred'] = (bool) $validated['is_starred'];
+
+        if (empty($updates)) {
+            return response()->json(['error' => 'Sin cambios solicitados.'], 422);
+        }
+
+        $updated = Message::whereIn('account_id', $accountIds)
+            ->whereIn('id', $validated['ids'])
+            ->update($updates);
+
+        return response()->json(['updated' => $updated]);
+    }
 }

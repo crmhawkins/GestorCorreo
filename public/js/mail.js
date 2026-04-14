@@ -26,6 +26,9 @@ const S = {
     contacts: [],
     composeToEmails: [],
     composeCcEmails: [],
+    selectedIds: new Set(),
+    lastClickedId: null,
+    undoTimer: null,
 };
 
 /* ── Auth guard ─────────────────────────────────────────────────── */
@@ -236,13 +239,14 @@ function renderMessages() {
     const container = document.getElementById('messages-container');
     if (!S.messages.length) {
         container.innerHTML = '<div class="empty-state"><p>Sin mensajes</p><p class="hint">Pulsa Sincronizar para descargar</p></div>';
+        renderBulkBar();
         return;
     }
     container.innerHTML = S.messages.map(m => `
-        <div class="message-item ${m.is_read ? 'read' : 'unread'} ${S.activeMessage?.id === m.id ? 'active' : ''}"
+        <div class="message-item ${m.is_read ? 'read' : 'unread'} ${S.activeMessage?.id === m.id ? 'active' : ''} ${S.selectedIds.has(m.id) ? 'selected' : ''}"
              data-id="${m.id}" draggable="true"
-             ondragstart="onMessageDragStart(event,'${m.id}')"
-             onclick="openMessage('${m.id}')" ondblclick="openMessageLarge('${m.id}')">
+             ondragstart="onMessageDragStart(event,'${m.id}')">
+            <input type="checkbox" class="msg-checkbox" data-id="${m.id}" ${S.selectedIds.has(m.id) ? 'checked' : ''}>
             <div class="message-from">
                 ${m.is_read ? '' : '<span style="color:var(--accent);font-size:.5rem">&#9679;</span>'}
                 ${escHtml(isSentLikeMessage(m) ? ('Para: ' + (getPrimaryTo(m) || '')) : (m.from_name || m.from_email || ''))}
@@ -259,6 +263,177 @@ function renderMessages() {
             </div>
         </div>
     `).join('');
+
+    // Bind checkbox clicks (with shift-range support)
+    container.querySelectorAll('.msg-checkbox').forEach(cb => {
+        cb.addEventListener('click', e => {
+            e.stopPropagation();
+            handleCheckboxClick(cb.dataset.id, e.shiftKey);
+        });
+    });
+
+    // Bind row click to open message (but not when clicking checkbox/star)
+    container.querySelectorAll('.message-item').forEach(row => {
+        row.addEventListener('click', e => {
+            if (e.target.closest('.msg-checkbox') || e.target.closest('.btn-star')) return;
+            openMessage(row.dataset.id);
+        });
+        row.addEventListener('dblclick', e => {
+            if (e.target.closest('.msg-checkbox')) return;
+            openMessageLarge(row.dataset.id);
+        });
+    });
+
+    renderBulkBar();
+}
+
+/* ── Multi-select ──────────────────────────────────────────────── */
+function handleCheckboxClick(id, shiftKey) {
+    if (shiftKey && S.lastClickedId) {
+        // Range select
+        const ids = S.messages.map(m => m.id);
+        const a = ids.indexOf(S.lastClickedId);
+        const b = ids.indexOf(id);
+        if (a >= 0 && b >= 0) {
+            const [start, end] = a < b ? [a, b] : [b, a];
+            const shouldSelect = !S.selectedIds.has(id);
+            for (let i = start; i <= end; i++) {
+                if (shouldSelect) S.selectedIds.add(ids[i]);
+                else S.selectedIds.delete(ids[i]);
+            }
+        }
+    } else {
+        if (S.selectedIds.has(id)) S.selectedIds.delete(id);
+        else S.selectedIds.add(id);
+    }
+    S.lastClickedId = id;
+    renderMessages();
+    updateSelectAllState();
+}
+
+function clearSelection() {
+    S.selectedIds.clear();
+    S.lastClickedId = null;
+    renderMessages();
+    updateSelectAllState();
+}
+
+function selectAllVisible() {
+    S.messages.forEach(m => S.selectedIds.add(m.id));
+    renderMessages();
+    updateSelectAllState();
+}
+
+function updateSelectAllState() {
+    const cb = document.getElementById('select-all-checkbox');
+    const label = document.getElementById('select-all-label');
+    if (!cb) return;
+    const total = S.messages.length;
+    const selected = S.messages.filter(m => S.selectedIds.has(m.id)).length;
+    if (selected === 0) { cb.checked = false; cb.indeterminate = false; }
+    else if (selected === total) { cb.checked = true; cb.indeterminate = false; }
+    else { cb.checked = false; cb.indeterminate = true; }
+    if (label) label.textContent = selected > 0 ? `${selected} seleccionados` : 'Seleccionar todo';
+}
+
+function renderBulkBar() {
+    const bar = document.getElementById('bulk-bar');
+    if (!bar) return;
+    const count = S.selectedIds.size;
+    bar.classList.toggle('visible', count > 0);
+    document.getElementById('bulk-bar-count').textContent = String(count);
+
+    // Populate move-to dropdown with categories + builtins
+    const moveSelect = document.getElementById('bulk-move-select');
+    if (moveSelect && count > 0) {
+        const builtins = [
+            { key: 'Interesantes', name: 'Interesantes' },
+            { key: 'Servicios', name: 'Servicios' },
+            { key: 'EnCopia', name: 'En copia' },
+        ];
+        const customs = (S.categories || []).filter(c => !['Interesantes','Servicios','EnCopia','SPAM'].includes(c.key));
+        const all = [...builtins, ...customs];
+        moveSelect.innerHTML = '<option value="">Mover a...</option>' +
+            all.map(c => `<option value="${escHtml(c.key)}">${escHtml(c.name || c.key)}</option>`).join('');
+    }
+}
+
+/* ── Bulk actions ──────────────────────────────────────────────── */
+async function bulkDelete() {
+    const ids = Array.from(S.selectedIds);
+    if (!ids.length) return;
+    if (!confirm(`Eliminar ${ids.length} mensaje(s)?`)) return;
+    const r = await api('POST', '/messages/bulk/delete', { ids });
+    if (r?.ok) {
+        S.messages = S.messages.filter(m => !S.selectedIds.has(m.id));
+        S.selectedIds.clear();
+        renderMessages();
+        loadUnreadCounts();
+        showUndoBar(`${r.data.deleted} eliminado(s)`, null);
+    } else toast('Error al eliminar', 'error');
+}
+
+async function bulkMarkSpam() {
+    const ids = Array.from(S.selectedIds);
+    if (!ids.length) return;
+    // Collect unique sender emails to create rules
+    const senders = [...new Set(S.messages.filter(m => S.selectedIds.has(m.id)).map(m => m.from_email).filter(Boolean))];
+    const r = await api('POST', '/messages/bulk/classify', { ids, classification_label: 'SPAM' });
+    if (r?.ok) {
+        // Auto-create sender rules
+        for (const email of senders) {
+            await api('POST', '/rules', { sender_email: email, target_folder: 'SPAM', is_active: true });
+        }
+        toast(`${r.data.updated} marcados como SPAM. Reglas creadas para ${senders.length} remitente(s).`, 'success');
+        S.selectedIds.clear();
+        await loadMessages(true);
+    } else toast('Error', 'error');
+}
+
+async function bulkMove(label) {
+    const ids = Array.from(S.selectedIds);
+    if (!ids.length || !label) return;
+    const r = await api('POST', '/messages/bulk/classify', { ids, classification_label: label });
+    if (r?.ok) {
+        toast(`${r.data.updated} movido(s) a ${label}`, 'success');
+        S.selectedIds.clear();
+        await loadMessages(true);
+    } else toast('Error', 'error');
+}
+
+async function bulkMarkRead() {
+    const ids = Array.from(S.selectedIds);
+    if (!ids.length) return;
+    const r = await api('POST', '/messages/bulk/flags', { ids, is_read: true });
+    if (r?.ok) {
+        S.messages.forEach(m => { if (S.selectedIds.has(m.id)) m.is_read = true; });
+        S.selectedIds.clear();
+        renderMessages();
+        loadUnreadCounts();
+        toast(`${r.data.updated} marcado(s) como leidos`, 'success');
+    } else toast('Error', 'error');
+}
+
+/* ── Undo bar ──────────────────────────────────────────────────── */
+function showUndoBar(text, undoFn) {
+    const old = document.getElementById('undo-bar');
+    if (old) old.remove();
+    if (S.undoTimer) clearTimeout(S.undoTimer);
+
+    const bar = document.createElement('div');
+    bar.id = 'undo-bar';
+    bar.className = 'undo-bar';
+    bar.innerHTML = `<span>${escHtml(text)}</span>${undoFn ? '<button id="undo-btn">Deshacer</button>' : ''}`;
+    document.body.appendChild(bar);
+
+    if (undoFn) {
+        document.getElementById('undo-btn').addEventListener('click', () => {
+            undoFn();
+            bar.remove();
+            if (S.undoTimer) clearTimeout(S.undoTimer);
+        });
+    }
+    S.undoTimer = setTimeout(() => bar.remove(), 5000);
 }
 
 /* ── Render: viewer ────────────────────────────────────────────── */
@@ -314,7 +489,7 @@ async function renderViewer(msg) {
 
 /* ── Load data ─────────────────────────────────────────────────── */
 async function loadMessages(reset = true) {
-    if (reset) { S.page = 1; S.messages = []; S.hasMore = true; }
+    if (reset) { S.page = 1; S.messages = []; S.hasMore = true; S.selectedIds.clear(); S.lastClickedId = null; }
     if (!S.hasMore) return;
     const params = new URLSearchParams({ page: S.page, per_page: 50 });
     if (S.selectedAccount) params.set('account_id', S.selectedAccount);
@@ -445,16 +620,41 @@ window.toggleRead = async function(id, current) {
     renderMessages();
 };
 
-async function setMessageFolderByDrop(messageId, targetFilter) {
-    if (!messageId || !targetFilter || targetFilter === 'all') return;
-    if (targetFilter === 'deleted') return deleteMsg(messageId);
-    if (targetFilter === 'starred') { const m = S.messages.find(x => x.id === messageId); return toggleStar({ stopPropagation(){} }, messageId, !!m?.is_starred); }
+async function setMessageFolderByDrop(payload, targetFilter) {
+    if (!payload || !targetFilter || targetFilter === 'all') return;
+
+    // payload may be a single id string or comma-separated ids
+    const ids = String(payload).split(',').filter(Boolean);
+    if (!ids.length) return;
+
+    if (targetFilter === 'deleted') {
+        if (ids.length === 1) return deleteMsg(ids[0]);
+        // Bulk delete
+        S.selectedIds = new Set(ids);
+        return bulkDelete();
+    }
+    if (targetFilter === 'starred') {
+        for (const id of ids) {
+            const m = S.messages.find(x => x.id === id);
+            await toggleStar({ stopPropagation(){} }, id, !!m?.is_starred);
+        }
+        return;
+    }
+
     const allowed = new Set(['Interesantes', 'Servicios', 'EnCopia', 'SPAM', ...(S.categories || []).map(c => c.key)]);
     if (!allowed.has(targetFilter)) return;
-    const r = await api('PUT', `/messages/${messageId}/classify`, { classification_label: targetFilter });
-    if (!r?.ok) { toast('No se pudo mover', 'error'); return; }
+
+    if (ids.length === 1) {
+        const r = await api('PUT', `/messages/${ids[0]}/classify`, { classification_label: targetFilter });
+        if (!r?.ok) { toast('No se pudo mover', 'error'); return; }
+        toast('Mensaje movido a ' + targetFilter, 'success');
+    } else {
+        const r = await api('POST', '/messages/bulk/classify', { ids, classification_label: targetFilter });
+        if (!r?.ok) { toast('No se pudieron mover', 'error'); return; }
+        S.selectedIds.clear();
+        toast(`${r.data.updated} mensajes movidos a ${targetFilter}`, 'success');
+    }
     await loadMessages(true); loadUnreadCounts();
-    toast('Mensaje movido a ' + targetFilter, 'success');
 }
 
 window.markAsSpam = async function(id) {
@@ -470,7 +670,24 @@ window.markAsSpam = async function(id) {
     }
 };
 
-window.onMessageDragStart = function(e, id) { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', id); };
+window.onMessageDragStart = function(e, id) {
+    e.dataTransfer.effectAllowed = 'move';
+    // If the dragged item is part of the current selection, drag all selected
+    let payload = id;
+    if (S.selectedIds.has(id) && S.selectedIds.size > 1) {
+        payload = Array.from(S.selectedIds).join(',');
+        // Show count badge in drag image
+        try {
+            const drag = document.createElement('div');
+            drag.textContent = `${S.selectedIds.size} mensajes`;
+            drag.style.cssText = 'position:absolute;top:-1000px;padding:.4rem .8rem;background:var(--accent);color:#fff;border-radius:6px;font:600 .8rem Inter,sans-serif';
+            document.body.appendChild(drag);
+            e.dataTransfer.setDragImage(drag, 0, 0);
+            setTimeout(() => drag.remove(), 0);
+        } catch {}
+    }
+    e.dataTransfer.setData('text/plain', payload);
+};
 
 window.deleteMsg = async function(id) {
     const r = await api('DELETE', `/messages/${id}`);
@@ -1087,6 +1304,44 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('list-pane').addEventListener('scroll', e => {
         const el = e.target;
         if (el.scrollTop + el.clientHeight >= el.scrollHeight - 100) loadMessages(false);
+    });
+
+    // Bulk actions
+    document.getElementById('bulk-delete').addEventListener('click', bulkDelete);
+    document.getElementById('bulk-spam').addEventListener('click', bulkMarkSpam);
+    document.getElementById('bulk-mark-read').addEventListener('click', bulkMarkRead);
+    document.getElementById('bulk-clear').addEventListener('click', clearSelection);
+    document.getElementById('bulk-move-select').addEventListener('change', e => {
+        if (e.target.value) { bulkMove(e.target.value); e.target.value = ''; }
+    });
+
+    // Select-all checkbox
+    document.getElementById('select-all-checkbox').addEventListener('click', e => {
+        if (e.target.checked) selectAllVisible();
+        else clearSelection();
+    });
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', e => {
+        // Skip if typing in an input/textarea/editor
+        const tag = (e.target.tagName || '').toLowerCase();
+        if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+        if (e.target.isContentEditable) return;
+
+        // Esc clears selection or closes viewer
+        if (e.key === 'Escape') {
+            if (S.selectedIds.size > 0) clearSelection();
+            else if (S.activeMessage) closeViewer();
+            return;
+        }
+        // Ctrl/Cmd + A → select all visible
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') {
+            e.preventDefault(); selectAllVisible(); return;
+        }
+        // Delete/Backspace → bulk delete (if selection)
+        if ((e.key === 'Delete' || e.key === 'Backspace') && S.selectedIds.size > 0) {
+            e.preventDefault(); bulkDelete(); return;
+        }
     });
 
     // Folder events
