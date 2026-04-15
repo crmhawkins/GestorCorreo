@@ -315,16 +315,35 @@ class SyncService
             // después. El backfill histórico se hace con un comando aparte.
             $newUids = array_slice($newUids, -self::BATCH_SIZE);
 
-            // Pre-cargar message_ids existentes en BD (una sola query) para evitar N+1
-            $existingMessageIds = Message::where('account_id', $account->id)
+            // Pre-cargar message_ids existentes en BD — normalizados sin chevrones
+            // para que el dedup funcione con mezcla de cuentas POP3 (histórico con
+            // "<x@y>") y IMAP (fetchMessageHeaders devuelve "x@y" sin chevrones).
+            $rawExistingIds = Message::where('account_id', $account->id)
                 ->whereNotNull('message_id')
                 ->where('message_id', '!=', '')
                 ->pluck('message_id')
+                ->all();
+            $existingMessageIds = [];
+            foreach ($rawExistingIds as $rawId) {
+                $norm = ImapService::normalizeMessageId((string)$rawId);
+                if ($norm !== '') $existingMessageIds[$norm] = 1;
+            }
+
+            // Pre-cargar también imap_uid existentes para dedup adicional
+            // (evita inserciones duplicadas si el mismo UID se procesa 2 veces).
+            $existingUids = Message::where('account_id', $account->id)
+                ->whereNotNull('imap_uid')
+                ->pluck('imap_uid')
                 ->flip()
                 ->all();
 
             foreach ($newUids as $uid) {
                 try {
+                    // Saltamos inmediatamente si ya tenemos ese UID en BD
+                    if (isset($existingUids[(string)$uid])) {
+                        continue;
+                    }
+
                     // Fetch headers
                     $headers = $imap->fetchMessageHeaders($uid);
                     if (!$headers) {
@@ -371,10 +390,11 @@ class SyncService
                         'created_at'     => now(),
                     ]);
 
-                    // Registrar en mapa en memoria para evitar duplicados en el mismo lote
+                    // Registrar en mapas en memoria para evitar duplicados en el mismo lote
                     if ($headers['message_id']) {
                         $existingMessageIds[$headers['message_id']] = 1;
                     }
+                    $existingUids[(string)$uid] = 1;
 
                     // Guardar adjuntos
                     if (!empty($bodyData['attachments'])) {
@@ -637,11 +657,21 @@ class SyncService
             $suffix = $remaining > 0 ? " ({$remaining} más en la próxima sync)" : '';
             yield ['status' => 'downloading', 'current' => 0, 'total' => $total, 'message' => "Descargando {$total} mensajes nuevos{$suffix}..."];
 
-            // Pre-cargar message_ids existentes — evita N+1 dentro del bucle
-            $existingMessageIds = Message::where('account_id', $account->id)
+            // Pre-cargar message_ids existentes (normalizados sin chevrones)
+            $rawExistingIds = Message::where('account_id', $account->id)
                 ->whereNotNull('message_id')
                 ->where('message_id', '!=', '')
                 ->pluck('message_id')
+                ->all();
+            $existingMessageIds = [];
+            foreach ($rawExistingIds as $rawId) {
+                $norm = ImapService::normalizeMessageId((string)$rawId);
+                if ($norm !== '') $existingMessageIds[$norm] = 1;
+            }
+            // Pre-cargar imap_uid existentes para dedup adicional
+            $existingUids = Message::where('account_id', $account->id)
+                ->whereNotNull('imap_uid')
+                ->pluck('imap_uid')
                 ->flip()
                 ->all();
 
@@ -654,6 +684,11 @@ class SyncService
                 yield ['status' => 'downloading', 'current' => $current, 'total' => $total];
 
                 try {
+                    // Saltar UIDs ya conocidos sin hacer fetch
+                    if (isset($existingUids[(string)$uid])) {
+                        continue;
+                    }
+
                     $headers = $imap->fetchMessageHeaders($uid);
                     if (!$headers) continue;
 
@@ -697,10 +732,11 @@ class SyncService
                         $this->saveAttachments($bodyData['attachments'], $message);
                     }
 
-                    // Actualizar mapa en memoria para evitar duplicados dentro del lote
+                    // Actualizar mapas en memoria para evitar duplicados dentro del lote
                     if ($headers['message_id']) {
                         $existingMessageIds[$headers['message_id']] = 1;
                     }
+                    $existingUids[(string)$uid] = 1;
 
                     $newMessageIds[] = $messageId;
                     $newMessages++;

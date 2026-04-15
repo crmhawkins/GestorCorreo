@@ -178,7 +178,7 @@ class ImapService
 
             return [
                 'uid'          => $uid,
-                'message_id'   => (string)$message->getMessageId(),
+                'message_id'   => $this->normalizeMessageId((string)$message->getMessageId()),
                 'subject'      => $this->decodeMimeHeader((string)$message->getSubject()),
                 'from_name'    => $this->decodeMimeHeader((string)($message->getFrom()[0]->personal ?? '')),
                 'from_email'   => (string)($message->getFrom()[0]->mail ?? ''),
@@ -190,6 +190,18 @@ class ImapService
         } catch (\Exception $e) {
             return null;
         }
+    }
+
+    /**
+     * Normaliza un Message-Id RFC822: elimina chevrones y espacios envolventes.
+     * POP3 (parser propio) lo guardaba tal cual, webklex lo entrega con <...>.
+     * Almacenar SIEMPRE sin chevrones permite dedup consistente entre ambos.
+     */
+    public static function normalizeMessageId(string $messageId): string
+    {
+        $messageId = trim($messageId);
+        if ($messageId === '') return '';
+        return trim($messageId, "<> \t\r\n");
     }
 
     /**
