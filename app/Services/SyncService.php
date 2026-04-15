@@ -83,6 +83,24 @@ class SyncService
     }
 
     /**
+     * ¿Este mensaje debe clasificarse automáticamente con IA?
+     *
+     * Regla: sólo los recibidos HOY (zona horaria de la app). Los históricos
+     * se guardan SIN clasificación — evita gastar tokens reclasificando
+     * miles de emails antiguos cuando se migra una cuenta o se hace un
+     * backfill, y no ensucia la UI moviendo correos viejos de carpeta.
+     */
+    private function isClassifiableToday(mixed $date): bool
+    {
+        try {
+            if (empty($date)) return false;
+            return Carbon::parse($date)->isToday();
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    /**
      * Detecta el protocolo y sincroniza la cuenta.
      *
      * @return array ['status' => 'success'|'error', 'new_messages' => int, 'new_message_ids' => [], 'error' => '']
@@ -230,7 +248,9 @@ class SyncService
                         $this->saveAttachments($msgData['attachments'], $message);
                     }
 
-                    if ($account->auto_classify) {
+                    // Sólo clasificamos con IA los mensajes del día actual
+                    // — los históricos quedan sin clasificar para no gastar tokens.
+                    if ($account->auto_classify && $this->isClassifiableToday($msgData['date'] ?? null)) {
                         $this->classificationService->classifyMessage($message, $account);
                     }
 
@@ -401,8 +421,8 @@ class SyncService
                         $this->saveAttachments($bodyData['attachments'], $message);
                     }
 
-                    // Clasificación automática en recepción (solo si está activado).
-                    if ($account->auto_classify) {
+                    // Clasificación automática sólo para correos del día actual
+                    if ($account->auto_classify && $this->isClassifiableToday($headers['date'] ?? null)) {
                         $this->classificationService->classifyMessage($message, $account);
                     }
 
@@ -597,7 +617,8 @@ class SyncService
 
                     $newMessageIds[] = $messageId;
                     $newMessages++;
-                    if ($account->auto_classify) {
+                    // Sólo encolamos para clasificación los mensajes de HOY
+                    if ($account->auto_classify && $this->isClassifiableToday($msgData['date'] ?? null)) {
                         $toClassify[] = ['message' => $message, 'account' => $account];
                     }
                 } catch (\Throwable $e) {
@@ -741,7 +762,8 @@ class SyncService
                     $newMessageIds[] = $messageId;
                     $newMessages++;
 
-                    if ($account->auto_classify) {
+                    // Sólo encolamos para clasificación los mensajes de HOY
+                    if ($account->auto_classify && $this->isClassifiableToday($headers['date'] ?? null)) {
                         $toClassify[] = ['message' => $message, 'account' => $account];
                     }
                 } catch (\Throwable $e) {
