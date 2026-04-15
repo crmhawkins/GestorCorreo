@@ -179,8 +179,8 @@ class ImapService
             return [
                 'uid'          => $uid,
                 'message_id'   => (string)$message->getMessageId(),
-                'subject'      => (string)$message->getSubject(),
-                'from_name'    => (string)($message->getFrom()[0]->personal ?? ''),
+                'subject'      => $this->decodeMimeHeader((string)$message->getSubject()),
+                'from_name'    => $this->decodeMimeHeader((string)($message->getFrom()[0]->personal ?? '')),
                 'from_email'   => (string)($message->getFrom()[0]->mail ?? ''),
                 'to_addresses' => json_encode($this->parseAddresses($message->getTo())),
                 'cc_addresses'   => json_encode($this->parseAddresses($message->getCc())),
@@ -190,6 +190,38 @@ class ImapService
         } catch (\Exception $e) {
             return null;
         }
+    }
+
+    /**
+     * Decodifica headers MIME tipo =?UTF-8?Q?...?= o =?UTF-8?B?...?=.
+     * webklex getSubject() a veces devuelve el valor codificado tal cual,
+     * especialmente cuando el subject está partido en varias piezas encoded.
+     */
+    private function decodeMimeHeader(string $value): string
+    {
+        if ($value === '') return '';
+
+        // Si no hay marca de codificación MIME, devolver tal cual.
+        if (!str_contains($value, '=?')) {
+            return $value;
+        }
+
+        // iconv_mime_decode respeta encodings múltiples en una misma cadena.
+        if (function_exists('iconv_mime_decode')) {
+            $decoded = @iconv_mime_decode($value, ICONV_MIME_DECODE_CONTINUE_ON_ERROR, 'UTF-8');
+            if ($decoded !== false && $decoded !== '') {
+                return $decoded;
+            }
+        }
+
+        if (function_exists('mb_decode_mimeheader')) {
+            $decoded = @mb_decode_mimeheader($value);
+            if ($decoded !== '') {
+                return $decoded;
+            }
+        }
+
+        return $value;
     }
 
     public function fetchFullMessageBody(int $uid): ?array
