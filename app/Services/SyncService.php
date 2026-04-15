@@ -303,11 +303,15 @@ class SyncService
                 ->where('imap_uid', 'REGEXP', '^[0-9]+$')
                 ->max(\Illuminate\Support\Facades\DB::raw('CAST(imap_uid AS UNSIGNED)'));
 
-            // Obtener UIDs nuevos
+            // Obtener UIDs nuevos (ordenados ascendente)
             $newUids = $imap->getNewMessageUids($lastUid);
 
-            // Aplicar BATCH_SIZE para evitar timeouts en el job (coherente con la versión streaming)
-            $newUids = array_slice($newUids, 0, self::BATCH_SIZE);
+            // IMPORTANTE: coger los ÚLTIMOS BATCH_SIZE (los UIDs más altos = más
+            // recientes). Si tomáramos array_slice(0, BATCH_SIZE) descargaríamos
+            // los más viejos primero, con lo que tras migrar una cuenta POP3
+            // grande el usuario no vería sus correos nuevos hasta muchas syncs
+            // después. El backfill histórico se hace con un comando aparte.
+            $newUids = array_slice($newUids, -self::BATCH_SIZE);
 
             // Pre-cargar message_ids existentes en BD (una sola query) para evitar N+1
             $existingMessageIds = Message::where('account_id', $account->id)
@@ -621,7 +625,8 @@ class SyncService
                 ->max(\Illuminate\Support\Facades\DB::raw('CAST(imap_uid AS UNSIGNED)'));
 
             $newUids     = $imap->getNewMessageUids($lastUid);
-            $pendingUids = array_slice($newUids, 0, self::BATCH_SIZE);
+            // Tomar los UIDs más altos (más recientes); ver nota en syncImap()
+            $pendingUids = array_slice($newUids, -self::BATCH_SIZE);
             $remaining   = count($newUids) - count($pendingUids);
             $total       = count($pendingUids);
             $current     = 0;
