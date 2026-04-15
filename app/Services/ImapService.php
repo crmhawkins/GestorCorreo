@@ -108,9 +108,12 @@ class ImapService
         try {
             $folder = $this->client->getFolder($this->currentFolderName ?: 'INBOX');
 
-            // whereUidGreaterThan(0) también funciona como "todos" y evita descargar
-            // el buzón entero con ->all() en buzones grandes (primera sync).
-            $messages = $folder->messages()->whereUidGreaterThan($lastUid)->get();
+            // OJO: en webklex/php-imap 6.x, whereUidGreaterThan(0) NO equivale a "todos".
+            // El SEARCH IMAP "UID 0:*" devuelve 0 resultados en IONOS y otros servidores.
+            // Para la primera sync (lastUid=0) hay que usar ->all() explícitamente.
+            $messages = $lastUid > 0
+                ? $folder->messages()->whereUidGreaterThan($lastUid)->get()
+                : $folder->messages()->all()->get();
 
             $uids = [];
             foreach ($messages as $msg) {
