@@ -18,7 +18,7 @@ class SyncAccountJob implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public int $tries   = 2;
-    public int $timeout = 300; // 5 minutos
+    public int $timeout = 600; // 10 minutos — coherente con set_time_limit(600) en SyncService
 
     public function __construct(public int $accountId) {}
 

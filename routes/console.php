@@ -42,7 +42,11 @@ Schedule::call(function () {
         $lastSync        = cache($cacheKey);
         $intervalMinutes = (int) $account->auto_sync_interval;
 
-        if (!$lastSync || now()->diffInMinutes($lastSync) >= $intervalMinutes) {
+        // Carbon 3: diffInMinutes devuelve valores con signo por defecto.
+        // Usamos $absolute=true para obtener minutos transcurridos positivos.
+        $elapsed = $lastSync ? now()->diffInMinutes($lastSync, true) : null;
+
+        if ($elapsed === null || $elapsed >= $intervalMinutes) {
             SyncAccountJob::dispatch($account->id);
             cache([$cacheKey => now()], now()->addHours(24));
         }

@@ -22,7 +22,8 @@ class Pop3Service
         $host = (string)$this->account->imap_host;
         $port = (int)$this->account->imap_port;
         $timeout = 30;
-        $isSsl = in_array($port, [965, 995], true);
+        // Puerto estándar POP3S es 995. 110 es POP3 plano (opcionalmente con STARTTLS, no soportado aquí).
+        $isSsl = ($port === 995);
         $transport = $isSsl ? 'tls' : 'tcp';
         $target = sprintf('%s://%s:%d', $transport, $host, $port);
 

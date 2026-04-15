@@ -107,9 +107,10 @@ class ImapService
         if (!$this->client || !$this->client->isConnected()) return [];
         try {
             $folder = $this->client->getFolder($this->currentFolderName ?: 'INBOX');
-            $messages = ($lastUid === 0) 
-                ? $folder->messages()->all()->get() 
-                : $folder->messages()->whereUidGreaterThan($lastUid)->get();
+
+            // whereUidGreaterThan(0) también funciona como "todos" y evita descargar
+            // el buzón entero con ->all() en buzones grandes (primera sync).
+            $messages = $folder->messages()->whereUidGreaterThan($lastUid)->get();
 
             $uids = [];
             foreach ($messages as $msg) {

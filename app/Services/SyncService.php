@@ -28,7 +28,7 @@ class SyncService
         $host = strtolower((string)($account->imap_host ?? ''));
         $port = (int)($account->imap_port ?? 0);
 
-        if (str_starts_with($host, 'pop.') || str_contains($host, 'pop3') || in_array($port, [110, 965, 995], true)) {
+        if (str_starts_with($host, 'pop.') || str_contains($host, 'pop3') || in_array($port, [110, 995], true)) {
             return 'pop3';
         }
 
@@ -152,6 +152,10 @@ class SyncService
 
             // Procesar de más reciente a más antiguo para que emails nuevos lleguen primero
             krsort($pending);
+
+            // Aplicar BATCH_SIZE para evitar timeouts en el job (coherente con la versión streaming).
+            // Los pendientes restantes se procesarán en la siguiente sincronización.
+            $pending = array_slice($pending, 0, self::BATCH_SIZE, true);
 
             foreach ($pending as $msgNum => $uid) {
                 try {
@@ -292,13 +296,18 @@ class SyncService
 
             $imap->selectFolder('INBOX');
 
-            // Obtener último imap_uid de BD para esta cuenta
+            // Obtener último imap_uid de BD para esta cuenta.
+            // Sólo considerar UIDs puramente numéricos (evita contaminación si la cuenta viene de POP3, donde imap_uid es un UIDL string).
             $lastUid = (int) Message::where('account_id', $account->id)
                 ->whereNotNull('imap_uid')
-                ->max('imap_uid');
+                ->where('imap_uid', 'REGEXP', '^[0-9]+$')
+                ->max(\Illuminate\Support\Facades\DB::raw('CAST(imap_uid AS UNSIGNED)'));
 
             // Obtener UIDs nuevos
             $newUids = $imap->getNewMessageUids($lastUid);
+
+            // Aplicar BATCH_SIZE para evitar timeouts en el job (coherente con la versión streaming)
+            $newUids = array_slice($newUids, 0, self::BATCH_SIZE);
 
             // Pre-cargar message_ids existentes en BD (una sola query) para evitar N+1
             $existingMessageIds = Message::where('account_id', $account->id)
@@ -608,7 +617,8 @@ class SyncService
 
             $lastUid = (int) Message::where('account_id', $account->id)
                 ->whereNotNull('imap_uid')
-                ->max('imap_uid');
+                ->where('imap_uid', 'REGEXP', '^[0-9]+$')
+                ->max(\Illuminate\Support\Facades\DB::raw('CAST(imap_uid AS UNSIGNED)'));
 
             $newUids     = $imap->getNewMessageUids($lastUid);
             $pendingUids = array_slice($newUids, 0, self::BATCH_SIZE);

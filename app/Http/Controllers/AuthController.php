@@ -224,7 +224,8 @@ class AuthController extends Controller
     private function testPop3Connection(string $username, string $password, string $host, int $port): bool
     {
         try {
-            $isSsl = in_array($port, [965, 995], true);
+            // Puerto estándar POP3S es 995.
+            $isSsl = ($port === 995);
             $transport = $isSsl ? 'tls' : 'tcp';
             $target = sprintf('%s://%s:%d', $transport, $host, $port);
 
