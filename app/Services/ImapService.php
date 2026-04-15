@@ -117,7 +117,14 @@ class ImapService
      */
     public function getNewMessageUids(int $lastUid = 0): array
     {
-        if (!$this->client || !$this->client->isConnected()) return [];
+        if (!$this->client) {
+            Log::warning('getNewMessageUids: client null');
+            return [];
+        }
+        if (!$this->client->isConnected()) {
+            Log::warning('getNewMessageUids: client not connected');
+            return [];
+        }
         try {
             // Asegurar que INBOX (o la carpeta seleccionada) está abierto en el servidor.
             $folderName = $this->currentFolderName ?: 'INBOX';
@@ -130,6 +137,19 @@ class ImapService
             // que queremos UIDs de vuelta en lugar de message sequence numbers.
             $response = $protocol->search(['UID', "{$from}:*"], \Webklex\PHPIMAP\IMAP::ST_UID);
             $data = $response->validatedData();
+
+            Log::info('getNewMessageUids: SEARCH UID result', [
+                'lastUid' => $lastUid,
+                'from'    => $from,
+                'raw_type' => gettype($data),
+                'raw_count' => is_array($data) ? count($data) : 'n/a',
+                'raw_sample' => is_array($data) ? array_slice($data, -5) : $data,
+            ]);
+
+            if (!is_array($data)) {
+                return [];
+            }
+
             $uids = [];
             foreach ($data as $id) {
                 $uid = (int) $id;
@@ -141,7 +161,10 @@ class ImapService
             sort($uids);
             return $uids;
         } catch (\Exception $e) {
-            Log::error('Error descargando UIDs:', ['error' => $e->getMessage()]);
+            Log::error('Error descargando UIDs:', [
+                'error' => $e->getMessage(),
+                'trace' => substr($e->getTraceAsString(), 0, 500),
+            ]);
             return [];
         }
     }
