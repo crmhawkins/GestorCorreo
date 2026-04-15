@@ -278,8 +278,10 @@ class SyncService
      */
     public function syncImap(Account $account, string $password): array
     {
-        // Ampliar límite de ejecución para sincronizaciones largas
+        // Ampliar límite de ejecución y memoria — mensajes con attachments
+        // grandes pueden reventar el default de 128M en webklex Structure.
         set_time_limit(600);
+        ini_set('memory_limit', '512M');
 
         $newMessages   = 0;
         $newMessageIds = [];
@@ -609,6 +611,7 @@ class SyncService
     private function syncImapStreaming(Account $account, string $password): \Generator
     {
         set_time_limit(600);
+        ini_set('memory_limit', '512M');
         $imap = new ImapService($account, $password);
 
         try {
