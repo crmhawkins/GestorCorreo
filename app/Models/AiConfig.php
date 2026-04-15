@@ -23,6 +23,7 @@ class AiConfig extends Model
         'api_key',
         'primary_model',
         'secondary_model',
+        'fallback_model',
         'updated_at',
     ];
 

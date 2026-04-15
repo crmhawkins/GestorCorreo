@@ -32,6 +32,11 @@ class AiService
 
     /**
      * Clasifica un mensaje usando el modelo primario y secundario.
+     *
+     * Si el primario falla (HTTP KO, timeout, sin tokens/cuota agotada),
+     * cae al fallback_model configurado (modelo local). El secundario
+     * se usa igualmente como segunda opinión cuando el primario SÍ
+     * responde — para el consenso / desacuerdo habitual.
      */
     public function classifyMessage(array $messageData, array $categories, ?string $customPrompt = null): array
     {
@@ -42,16 +47,36 @@ class AiService
 
         $primaryModel   = $this->config->primary_model;
         $secondaryModel = $this->config->secondary_model ?: $primaryModel;
+        $fallbackModel  = $this->config->fallback_model  ?: null;
 
         $prompt = $this->buildClassificationPrompt($messageData, $categories, $customPrompt);
 
         // Llamamos al modelo primario
         $gptResult = $this->callModel($primaryModel, $prompt);
 
+        // Si el primario falló y tenemos fallback distinto, usarlo
+        if (isset($gptResult['error']) && $fallbackModel && $fallbackModel !== $primaryModel) {
+            Log::warning('AiService: primario {$primaryModel} falló, usando fallback local', [
+                'primary'  => $primaryModel,
+                'fallback' => $fallbackModel,
+                'error'    => $gptResult['error'],
+            ]);
+            $gptResult = $this->callModel($fallbackModel, $prompt);
+            // Marcamos que la primera respuesta viene del fallback para rastrearlo
+            if (!isset($gptResult['error'])) {
+                $gptResult['source'] = 'fallback';
+            }
+        }
+
         // Llamamos al modelo secundario (puede ser el mismo)
         $qwenResult = $primaryModel !== $secondaryModel
             ? $this->callModel($secondaryModel, $prompt)
             : $gptResult;
+
+        // Si el secundario también falló y hay fallback, intentarlo también
+        if (isset($qwenResult['error']) && $fallbackModel && $fallbackModel !== $secondaryModel && $fallbackModel !== $primaryModel) {
+            $qwenResult = $this->callModel($fallbackModel, $prompt);
+        }
 
         $gptLabel  = $gptResult['label']  ?? null;
         $qwenLabel = $qwenResult['label'] ?? null;
@@ -140,8 +165,17 @@ PROMPT;
 
         $content = $this->callModelRaw($this->config->primary_model, $prompt);
 
+        // Fallback a modelo local si el primario falla o no tiene tokens
+        if ($content === null && $this->config->fallback_model && $this->config->fallback_model !== $this->config->primary_model) {
+            Log::warning('AiService::generateReply: primario falló, usando fallback', [
+                'primary'  => $this->config->primary_model,
+                'fallback' => $this->config->fallback_model,
+            ]);
+            $content = $this->callModelRaw($this->config->fallback_model, $prompt);
+        }
+
         if ($content === null) {
-            throw new \RuntimeException('La IA no devolvió contenido.');
+            throw new \RuntimeException('La IA no devolvió contenido (primario ni fallback).');
         }
 
         return trim($content);
@@ -159,12 +193,24 @@ PROMPT;
 
         try {
             $content = $this->callModelRaw($this->config->primary_model, 'ping', 5);
-
             if ($content !== null) {
-                return ['available' => true, 'model' => $this->config->primary_model];
+                return ['available' => true, 'model' => $this->config->primary_model, 'via' => 'primary'];
             }
 
-            return ['available' => false, 'reason' => 'La IA no respondió'];
+            // Primario KO, probar fallback local
+            if ($this->config->fallback_model && $this->config->fallback_model !== $this->config->primary_model) {
+                $content = $this->callModelRaw($this->config->fallback_model, 'ping', 5);
+                if ($content !== null) {
+                    return [
+                        'available' => true,
+                        'model'     => $this->config->fallback_model,
+                        'via'       => 'fallback',
+                        'reason'    => "El primario {$this->config->primary_model} no respondió. Usando fallback.",
+                    ];
+                }
+            }
+
+            return ['available' => false, 'reason' => 'Ni el primario ni el fallback respondieron.'];
         } catch (\Throwable $e) {
             return ['available' => false, 'reason' => $e->getMessage()];
         }
@@ -196,6 +242,13 @@ PROMPT;
     /**
      * Llamada HTTP cruda a la API personalizada.
      * Devuelve el texto de respuesta o null si falla.
+     *
+     * Considera "fallo" (y devuelve null):
+     *  - HTTP != 2xx
+     *  - Timeout / excepción de red
+     *  - HTTP 402/429 (pagos/rate limit)
+     *  - Body con "success": false o campos típicos de cuota/tokens agotados
+     *  - Respuesta vacía o parseo fallido
      */
     private function callModelRaw(string $modelName, string $prompt, int $timeout = 60): ?string
     {
@@ -203,25 +256,67 @@ PROMPT;
 
         $endpoint = $this->resolveChatEndpoint((string)$this->config->api_url);
 
-        $response = Http::withHeaders(['x-api-key' => $this->config->api_key])
-            ->withoutVerifying()
-            ->timeout($timeout)
-            ->post($endpoint, [
-                'prompt' => $prompt,
-                // Compatibilidad con APIs que esperan "modelo" o "model"
-                'modelo' => $modelName,
-                'model'  => $modelName,
-            ]);
+        try {
+            $response = Http::withHeaders(['x-api-key' => $this->config->api_key])
+                ->withoutVerifying()
+                ->timeout($timeout)
+                ->post($endpoint, [
+                    'prompt' => $prompt,
+                    // Compatibilidad con APIs que esperan "modelo" o "model"
+                    'modelo' => $modelName,
+                    'model'  => $modelName,
+                ]);
+        } catch (\Throwable $e) {
+            // Timeout, DNS, conexión, etc. → fallback
+            Log::warning("AiService: excepción HTTP con modelo {$modelName}: {$e->getMessage()}");
+            return null;
+        }
 
+        // HTTP 402/429/5xx/etc → fallback
         if ($response->failed()) {
-            Log::error("AiService: HTTP {$response->status()} desde {$endpoint}", [
+            Log::warning("AiService: HTTP {$response->status()} desde {$endpoint}", [
                 'model' => $modelName,
-                'body'  => mb_substr($response->body(), 0, 500),
+                'body'  => mb_substr($response->body(), 0, 300),
             ]);
             return null;
         }
 
-        return $this->extractTextFromResponse($response);
+        // Detectar errores "blandos" dentro de HTTP 200:
+        //   {"success": false, ...}
+        //   {"error": "..."}
+        //   body con "quota", "token", "rate limit", "insufficient_quota", etc.
+        $data = $response->json();
+        if (is_array($data)) {
+            if (isset($data['success']) && $data['success'] === false) {
+                Log::warning("AiService: success=false para modelo {$modelName}", [
+                    'body' => mb_substr($response->body(), 0, 300),
+                ]);
+                return null;
+            }
+            if (isset($data['error']) && !empty($data['error'])) {
+                Log::warning("AiService: error en body para modelo {$modelName}", [
+                    'error' => is_string($data['error']) ? $data['error'] : json_encode($data['error']),
+                ]);
+                return null;
+            }
+        }
+
+        // Heurística final sobre el texto bruto
+        $bodyLower = strtolower(mb_substr($response->body(), 0, 2000));
+        $quotaHints = ['insufficient_quota', 'out of tokens', 'tokens agotados', 'rate limit', 'quota exceeded', 'sin créditos', 'sin creditos', 'no tokens'];
+        foreach ($quotaHints as $hint) {
+            if (str_contains($bodyLower, $hint)) {
+                Log::warning("AiService: body indica sin tokens/cuota para modelo {$modelName}", ['hint' => $hint]);
+                return null;
+            }
+        }
+
+        $text = $this->extractTextFromResponse($response);
+        // Respuesta vacía también cuenta como fallo
+        if ($text === null || trim($text) === '') {
+            return null;
+        }
+        return $text;
     }
 
     private function resolveChatEndpoint(string $apiUrl): string
