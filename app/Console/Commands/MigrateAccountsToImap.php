@@ -9,6 +9,7 @@ use App\Services\ImapService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Webklex\PHPIMAP\ClientManager;
 
 /**
  * Migra cuentas POP3 → IMAP.
@@ -138,41 +139,55 @@ class MigrateAccountsToImap extends Command
                 continue;
             }
 
-            // Probar conexión IMAP ANTES de tocar nada
+            // Probar conexión IMAP ANTES de tocar nada.
+            // Usamos el cliente webklex directamente con STATUS (rápido, sin descargar headers).
             $this->line('  → Probando conexión IMAP...');
-            $testAccount = clone $account;
-            $testAccount->imap_host = $newHost;
-            $testAccount->imap_port = $newPort;
-            $testAccount->protocol  = 'imap';
-
-            $imap = new ImapService($testAccount, $password);
-            $connected = false;
+            $client = null;
             try {
-                $connected = $imap->connect();
+                $cm = new ClientManager();
+                $client = $cm->make([
+                    'host'          => $newHost,
+                    'port'          => $newPort,
+                    'encryption'    => 'ssl',
+                    'validate_cert' => false,
+                    'username'      => $account->username,
+                    'password'      => $password,
+                    'protocol'      => 'imap',
+                    'timeout'       => 30,
+                ]);
+                $client->connect();
             } catch (\Throwable $e) {
-                $this->error("  ✗ Excepción al conectar: {$e->getMessage()}");
-            }
-
-            if (!$connected) {
-                $this->error("  ✗ No se pudo conectar a {$newHost}:{$newPort} con IMAP.");
+                $this->error("  ✗ No se pudo conectar a {$newHost}:{$newPort}: {$e->getMessage()}");
                 $this->warn('     Puedes reintentar pasando --imap-host=<host-correcto> manualmente.');
-                try { $imap->disconnect(); } catch (\Throwable) {}
+                try { $client?->disconnect(); } catch (\Throwable) {}
                 $failed++;
                 continue;
             }
 
-            // Verificar que INBOX existe y se puede listar
+            // Verificar que INBOX existe y obtener counts con STATUS (operación O(1))
             try {
-                $imap->selectFolder('INBOX');
-                $uids = $imap->getNewMessageUids(0);
-                $this->line('  ✓ Conexión OK. INBOX tiene ' . count($uids) . ' mensajes.');
+                $folder = $client->getFolder('INBOX');
+                $status = $folder->status();
+                $msgsInInbox = (int)($status['messages'] ?? 0);
+                $unseen      = (int)($status['unseen'] ?? 0);
+                $this->line("  ✓ Conexión OK. INBOX: {$msgsInInbox} mensajes ({$unseen} sin leer).");
+
+                // Listar otras carpetas interesantes (informativo)
+                $folders = $client->getFolders(false);
+                $folderNames = [];
+                foreach ($folders as $f) {
+                    $folderNames[] = $f->name;
+                }
+                if (!empty($folderNames)) {
+                    $this->line('     Carpetas visibles: ' . implode(', ', $folderNames));
+                }
             } catch (\Throwable $e) {
-                $this->error("  ✗ Conexión OK pero no se pudo listar INBOX: {$e->getMessage()}");
-                try { $imap->disconnect(); } catch (\Throwable) {}
+                $this->error("  ✗ Conexión OK pero no se pudo examinar INBOX: {$e->getMessage()}");
+                try { $client->disconnect(); } catch (\Throwable) {}
                 $failed++;
                 continue;
             } finally {
-                try { $imap->disconnect(); } catch (\Throwable) {}
+                try { $client->disconnect(); } catch (\Throwable) {}
             }
 
             if (!$execute) {
