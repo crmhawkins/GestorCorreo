@@ -102,23 +102,54 @@ class ImapService
         return true;
     }
 
+    /**
+     * Devuelve los UIDs (ordenados ascendente) de los mensajes con UID >= $lastUid+1.
+     *
+     * Notas sobre webklex/php-imap 6.x:
+     *  - whereUidGreaterThan() NO existe (sólo en el wrapper laravel-imap).
+     *  - whereUid() acepta string con rangos IMAP ("X:*", "X:Y").
+     *  - El ->get() descarga headers por defecto — lento en buzones grandes.
+     *    setFetchBody(false) + setFetchFlags(false) lo reduce mucho.
+     */
     public function getNewMessageUids(int $lastUid = 0): array
     {
         if (!$this->client || !$this->client->isConnected()) return [];
         try {
             $folder = $this->client->getFolder($this->currentFolderName ?: 'INBOX');
 
-            // OJO: en webklex/php-imap 6.x, whereUidGreaterThan(0) NO equivale a "todos".
-            // El SEARCH IMAP "UID 0:*" devuelve 0 resultados en IONOS y otros servidores.
-            // Para la primera sync (lastUid=0) hay que usar ->all() explícitamente.
-            $messages = $lastUid > 0
-                ? $folder->messages()->whereUidGreaterThan($lastUid)->get()
-                : $folder->messages()->all()->get();
+            // Primera sync: para no descargar el buzón entero, pedimos sólo los más
+            // recientes usando STATUS→UIDNEXT como ancla. Pedimos un rango amplio
+            // (ultimos INITIAL_WINDOW UIDs) para tolerar huecos por eliminaciones.
+            // Los SyncService de arriba aplican BATCH_SIZE=50 sobre el resultado.
+            $initialWindow = 500;
+            if ($lastUid === 0) {
+                try {
+                    $status   = $folder->status();
+                    $uidNext  = (int)($status['uidnext'] ?? $status['UIDNEXT'] ?? 0);
+                    $fromUid  = max(1, $uidNext - $initialWindow);
+                } catch (\Throwable) {
+                    $fromUid = 1;
+                }
+                $range = $fromUid . ':*';
+            } else {
+                $range = ($lastUid + 1) . ':*';
+            }
+
+            $query = $folder->messages()
+                ->whereUid($range)
+                ->setFetchBody(false)
+                ->setFetchFlags(false);
+
+            $messages = $query->get();
 
             $uids = [];
             foreach ($messages as $msg) {
-                $uids[] = (int)$msg->getUid();
+                $uid = (int) $msg->getUid();
+                if ($uid > $lastUid) {
+                    $uids[] = $uid;
+                }
             }
+            $uids = array_values(array_unique($uids));
             sort($uids);
             return $uids;
         } catch (\Exception $e) {
