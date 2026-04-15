@@ -6,7 +6,8 @@
         "php": "^8.2",
         "laravel/framework": "^11.0",
         "laravel/sanctum": "^4.0",
-        "guzzlehttp/guzzle": "^7.8"
+        "guzzlehttp/guzzle": "^7.8",
+        "webklex/php-imap": "^6.2"
     },
     "suggest": {
         "ext-imap": "Necesario para la sincronización de correo POP3/IMAP"
