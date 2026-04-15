@@ -105,32 +105,34 @@ class ImapService
     /**
      * Devuelve los UIDs (ordenados asc) de los mensajes con UID > $lastUid.
      *
-     * Notas sobre webklex/php-imap 6.x:
-     *  - whereUidGreaterThan() NO existe (sólo en el wrapper laravel-imap).
-     *  - whereUid() acepta string, PERO generate_query() lo escapa entre comillas
-     *    cuando no es numérico, y IMAP no acepta rangos "X:*" entre comillas →
-     *    ERROR "BAD expected DIGIT". No podemos usar ranges UID por esta vía.
-     *  - Sustitución: ALL + setFetchBody(false) + setFetchFlags(false) listando
-     *    headers ligeros, y filtrado en PHP por UID > lastUid. Es O(N) en UIDs
-     *    del buzón pero barato porque no descarga bodies.
+     * Evitamos la API WhereQuery de webklex porque:
+     *  - whereUidGreaterThan() NO existe en php-imap 6.x.
+     *  - whereUid("X:*") se escapa entre comillas en generate_query() → IMAP BAD.
+     *  - ->all()->get() descarga headers completos y es muy lento en buzones
+     *    grandes (>1 min para 6k mensajes), colgando el sync.
+     *
+     * Alternativa: hablamos al IMAP a pelo via $protocol->search(['UID','X:*']).
+     * Eso manda SEARCH UID X:* al servidor y recibe una lista de UIDs sin
+     * descargar nada más. Comparable a lo que hacen Thunderbird/Outlook.
      */
     public function getNewMessageUids(int $lastUid = 0): array
     {
         if (!$this->client || !$this->client->isConnected()) return [];
         try {
-            $folder = $this->client->getFolder($this->currentFolderName ?: 'INBOX');
+            // Asegurar que INBOX (o la carpeta seleccionada) está abierto en el servidor.
+            $folderName = $this->currentFolderName ?: 'INBOX';
+            $this->client->openFolder($folderName);
 
-            $query = $folder->messages()
-                ->setFetchBody(false)
-                ->setFetchFlags(false)
-                ->setFetchOrderDesc()
-                ->all();
+            $protocol = $this->client->getConnection();
+            $from = max(1, $lastUid + 1);
 
-            $messages = $query->get();
-
+            // SEARCH UID {$from}:* — devuelve lista de UIDs. IMAP::ST_UID indica
+            // que queremos UIDs de vuelta en lugar de message sequence numbers.
+            $response = $protocol->search(['UID', "{$from}:*"], \Webklex\PHPIMAP\IMAP::ST_UID);
+            $data = $response->validatedData();
             $uids = [];
-            foreach ($messages as $msg) {
-                $uid = (int) $msg->getUid();
+            foreach ($data as $id) {
+                $uid = (int) $id;
                 if ($uid > $lastUid) {
                     $uids[] = $uid;
                 }
