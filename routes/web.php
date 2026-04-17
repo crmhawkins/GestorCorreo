@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\SsoController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -16,6 +17,9 @@ Route::withoutMiddleware([
 
     Route::get('/login', fn() => view('login'))->name('login');
     Route::get('/admin', fn() => view('admin'))->name('admin');
+
+    // SSO desde sistemas externos (CRM ivan). DEBE ir antes del catchall.
+    Route::get('/sso', [SsoController::class, 'handle'])->name('sso');
 
     // Todo lo demás → dashboard (el JS comprueba el token)
     Route::get('/{any?}', fn() => view('dashboard'))->where('any', '.*');
