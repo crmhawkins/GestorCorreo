@@ -3,6 +3,9 @@ set -e
 
 cd /var/www/html
 
+php artisan package:discover --ansi || true
+php artisan storage:link || true
+
 # Cache config/routes/views for production
 php artisan config:cache
 php artisan route:cache

@@ -13,8 +13,7 @@ RUN composer install --no-dev --optimize-autoloader --no-scripts --no-interactio
 
 COPY . .
 
-RUN composer dump-autoload --optimize \
-    && php artisan storage:link || true \
+RUN composer dump-autoload --optimize --no-scripts \
     && chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
 
 COPY docker/nginx.conf /etc/nginx/nginx.conf
