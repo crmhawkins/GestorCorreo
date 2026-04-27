@@ -148,6 +148,8 @@
                 <div class="list-select-bar">
                     <input type="checkbox" id="select-all-checkbox" title="Seleccionar todos">
                     <span id="select-all-label">Seleccionar todo</span>
+                    <span style="flex:1"></span>
+                    <button class="btn-toolbar" id="btn-mark-read-bar" title="Marcar todos como leídos" style="font-size:.68rem;padding:.18rem .5rem">&#10003; Todo leído</button>
                 </div>
                 <div class="bulk-bar" id="bulk-bar">
                     <span class="bulk-bar-count" id="bulk-bar-count">0</span>

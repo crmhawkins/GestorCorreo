@@ -1730,6 +1730,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('btn-add-folder').addEventListener('click', createCustomFolder);
     document.getElementById('btn-delete-folder').addEventListener('click', deleteSelectedFolder);
     document.getElementById('btn-mark-read').addEventListener('click', markAllRead);
+    const btnMarkReadBar = document.getElementById('btn-mark-read-bar');
+    if (btnMarkReadBar) btnMarkReadBar.addEventListener('click', markAllRead);
 
     // Filters
     document.getElementById('filter-date-from').addEventListener('change', e => { S.dateFrom = e.target.value; loadMessages(); });
