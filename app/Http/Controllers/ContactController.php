@@ -46,7 +46,7 @@ class ContactController extends Controller
         $user = $request->user();
 
         $validated = $request->validate([
-            'name'  => 'sometimes|string|max:255',
+            'name'  => 'sometimes|nullable|string|max:255',
             'email' => 'required|string|email|max:255',
         ]);
 
@@ -65,7 +65,7 @@ class ContactController extends Controller
         $validated = $request->validate([
             'contacts'         => 'required|array|min:1',
             'contacts.*.email' => 'required|string|email|max:255',
-            'contacts.*.name'  => 'sometimes|string|max:255',
+            'contacts.*.name'  => 'sometimes|nullable|string|max:255',
         ]);
 
         $created = 0;
