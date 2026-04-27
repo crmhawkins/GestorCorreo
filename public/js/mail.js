@@ -39,6 +39,7 @@ const S = {
 
 /* ── Font size ──────────────────────────────────────────────────────────────────────────────── */
 function applyFontSize(size) {
+    document.documentElement.style.fontSize = size + 'px';
     document.documentElement.style.setProperty('--font-size-base', size + 'px');
     const lbl = document.getElementById('font-size-label');
     if (lbl) lbl.textContent = size;
@@ -582,10 +583,17 @@ async function renderViewer(msg) {
         </div>`;
 
     if (!m.is_read) {
-        await api('PUT', `/messages/${m.id}/read`, { is_read: true });
-        const idx = S.messages.findIndex(x => x.id === m.id);
-        if (idx >= 0) S.messages[idx].is_read = true;
-        renderMessages();
+        const markRes = await api('PUT', `/messages/${m.id}/read`, { is_read: true });
+        if (markRes?.ok) {
+            m.is_read = true;
+            const idx = S.messages.findIndex(x => x.id === m.id);
+            if (idx >= 0) S.messages[idx].is_read = true;
+            renderMessages();
+            document.querySelectorAll(`.btn-toolbar[data-toggleread="${m.id}"]`).forEach(btn => {
+                btn.textContent = 'No leído';
+                btn.setAttribute('onclick', `toggleRead('${m.id}', true)`);
+            });
+        }
     }
 }
 
