@@ -65,7 +65,8 @@ class SyncService
 
     private function getSyncMinDate(): Carbon
     {
-        return Carbon::parse(self::SYNC_MIN_DATE);
+        $envDate = env('MAIL_SYNC_MIN_DATE', '');
+        return $envDate ? Carbon::parse($envDate) : Carbon::parse(self::SYNC_MIN_DATE);
     }
 
     private function isDateAllowed(mixed $date): bool
@@ -213,11 +214,30 @@ class SyncService
                     if ($ovMessageId) {
                         $existing = Message::where('message_id', $ovMessageId)->where('account_id', $account->id)->first();
                         if ($existing) {
-                            // Siempre actualizar imap_uid al valor real del servidor
                             if ($existing->imap_uid !== $uid) {
                                 $existing->imap_uid = $uid;
                                 $existing->save();
                             }
+                            $downloadedUids[$uid] = 1;
+                            continue;
+                        }
+                    }
+
+                    // Fallback dedup: subject + from_email + date (±1h)
+                    if (!empty($msgData['from_email']) && !empty($msgData['subject']) && !empty($msgData['date'])) {
+                        $msgDate = Carbon::parse($msgData['date']);
+                        $fallbackExisting = Message::where('account_id', $account->id)
+                            ->where('from_email', $this->safeText($msgData['from_email'], 255))
+                            ->where('subject', $this->safeText($msgData['subject'], 500))
+                            ->whereBetween('date', [$msgDate->copy()->subHour(), $msgDate->copy()->addHour()])
+                            ->where('folder', '!=', '_filtered')
+                            ->first();
+                        if ($fallbackExisting) {
+                            if (!$fallbackExisting->imap_uid) {
+                                $fallbackExisting->imap_uid = $uid;
+                                $fallbackExisting->save();
+                            }
+                            $downloadedUids[$uid] = 1;
                             continue;
                         }
                     }
@@ -585,6 +605,27 @@ class SyncService
                                 $existing->imap_uid = $uid;
                                 $existing->save();
                             }
+                            // Add to downloadedUids to prevent re-processing
+                            $downloadedUids[$uid] = 1;
+                            continue;
+                        }
+                    }
+
+                    // Fallback dedup: subject + from_email + date (±1h) — prevents re-download if UIDL regenerated
+                    if (!empty($msgData['from_email']) && !empty($msgData['subject']) && !empty($msgData['date'])) {
+                        $msgDate = Carbon::parse($msgData['date']);
+                        $fallbackExisting = Message::where('account_id', $account->id)
+                            ->where('from_email', $this->safeText($msgData['from_email'], 255))
+                            ->where('subject', $this->safeText($msgData['subject'], 500))
+                            ->whereBetween('date', [$msgDate->copy()->subHour(), $msgDate->copy()->addHour()])
+                            ->where('folder', '!=', '_filtered')
+                            ->first();
+                        if ($fallbackExisting) {
+                            if (!$fallbackExisting->imap_uid) {
+                                $fallbackExisting->imap_uid = $uid;
+                                $fallbackExisting->save();
+                            }
+                            $downloadedUids[$uid] = 1;
                             continue;
                         }
                     }

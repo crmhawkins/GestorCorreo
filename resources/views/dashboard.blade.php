@@ -39,6 +39,14 @@
                                 <svg viewBox="0 0 20 20" fill="currentColor" style="width:14px;height:14px;flex-shrink:0"><path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"/></svg>
                                 <span id="theme-label">Modo claro</span>
                             </button>
+                            <div class="settings-dropdown-divider"></div>
+                            <div class="settings-dropdown-item" style="display:flex;align-items:center;gap:.5rem;cursor:default">
+                                <svg viewBox="0 0 20 20" fill="currentColor" style="width:14px;height:14px;flex-shrink:0"><path d="M10 12a2 2 0 100-4 2 2 0 000 4z"/><path fill-rule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clip-rule="evenodd"/></svg>
+                                <span style="flex:1;font-size:.78rem">Tamaño fuente</span>
+                                <button class="btn-icon" id="btn-font-decrease" title="Reducir fuente" style="font-size:.9rem;width:22px;height:22px">A-</button>
+                                <span id="font-size-label" style="font-size:.75rem;min-width:28px;text-align:center">14</span>
+                                <button class="btn-icon" id="btn-font-increase" title="Aumentar fuente" style="font-size:.9rem;width:22px;height:22px">A+</button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -137,6 +145,7 @@
                     <span>seleccionados</span>
                     <span class="bulk-bar-spacer"></span>
                     <button class="btn-toolbar" id="bulk-mark-read">Leidos</button>
+                    <button class="btn-toolbar" id="bulk-mark-unread">No leído</button>
                     <select class="btn-toolbar" id="bulk-move-select" title="Mover a">
                         <option value="">Mover a...</option>
                     </select>
@@ -319,7 +328,8 @@
                 <div class="form-group flex-2" style="margin:0"><input type="email" id="contact-new-email" class="form-control" placeholder="email@dominio.com"></div>
                 <button class="btn-primary" id="btn-add-contact" style="align-self:stretch;white-space:nowrap">Anadir</button>
             </div>
-            <div id="contacts-list" style="max-height:350px;overflow-y:auto"></div>
+            <input type="search" id="contacts-search" class="form-control" placeholder="Buscar contacto..." style="margin-bottom:.5rem" autocomplete="off">
+            <div id="contacts-list" style="max-height:320px;overflow-y:auto"></div>
         </div>
     </div>
 </div>

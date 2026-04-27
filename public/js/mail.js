@@ -37,6 +37,20 @@ const S = {
     hoverTimer: null,
 };
 
+/* ── Font size ──────────────────────────────────────────────────────────────────────────────── */
+function applyFontSize(size) {
+    document.documentElement.style.setProperty('--font-size-base', size + 'px');
+    const lbl = document.getElementById('font-size-label');
+    if (lbl) lbl.textContent = size;
+}
+function getFontSize() { return parseInt(localStorage.getItem('font_size') || '14'); }
+function setFontSize(size) {
+    size = Math.max(11, Math.min(22, size));
+    localStorage.setItem('font_size', size);
+    applyFontSize(size);
+}
+applyFontSize(getFontSize());
+
 /* ── Auth guard ─────────────────────────────────────────────────── */
 if (!S.token) { window.location.href = '/login'; }
 
@@ -169,7 +183,42 @@ function buildPreviewHtml(message) {
         const url = match?.id ? `/api/attachments/${match.id}/download` : firstImg;
         return url ? `src=${q}${url}${q}` : full;
     });
+    // Ensure all links open in new tab + inject readable base styles
+    const baseInject = '<base target="_blank" rel="noopener noreferrer"><style>html,body{background:#fff!important;color:#1a1a1a}img{max-width:100%;height:auto}a{color:#2563eb}</style>';
+    if (/<html/i.test(html)) {
+        if (/<head(\s[^>]*)?>/i.test(html)) {
+            html = html.replace(/<head(\s[^>]*)?>/i, (m) => m + baseInject);
+        } else {
+            html = html.replace(/<html(\s[^>]*)?>/i, (m) => m + `<head>${baseInject}</head>`);
+        }
+    } else {
+        html = `<!DOCTYPE html><html><head><base target="_blank" rel="noopener noreferrer"><meta charset="utf-8"><style>html,body{background:#fff;color:#1a1a1a;font-family:system-ui,sans-serif;font-size:14px;line-height:1.6;word-break:break-word;max-width:100%;padding:12px;margin:0}img{max-width:100%;height:auto}a{color:#2563eb}pre,code{background:#f4f4f4;padding:2px 4px;border-radius:3px;font-size:13px}</style></head><body>${html}</body></html>`;
+    }
     return html;
+}
+
+async function resolveInlineImages(html, attachments) {
+    if (!html) return html;
+    // Find all /api/attachments/{id}/download URLs in src attributes
+    const matches = [...html.matchAll(/src="(\/api\/attachments\/\d+\/download)"/g)];
+    if (!matches.length) return html;
+    const unique = [...new Set(matches.map(m => m[1]))];
+    const cache = {};
+    await Promise.all(unique.map(async url => {
+        try {
+            const r = await fetch(url, { headers: { 'Authorization': `Bearer ${S.token}` } });
+            if (!r.ok) return;
+            const blob = await r.blob();
+            cache[url] = await new Promise(res => {
+                const fr = new FileReader();
+                fr.onload = () => res(fr.result);
+                fr.readAsDataURL(blob);
+            });
+        } catch {}
+    }));
+    return html.replace(/src="(\/api\/attachments\/\d+\/download)"/g, (full, url) =>
+        cache[url] ? `src="${cache[url]}"` : full
+    );
 }
 
 /* ── Theme ──────────────────────────────────────────────────────── */
@@ -453,6 +502,19 @@ async function bulkMarkRead() {
     } else toast('Error', 'error');
 }
 
+async function bulkMarkUnread() {
+    const ids = Array.from(S.selectedIds);
+    if (!ids.length) return;
+    const r = await api('POST', '/messages/bulk/flags', { ids, is_read: false });
+    if (r?.ok) {
+        S.messages.forEach(m => { if (S.selectedIds.has(m.id)) m.is_read = false; });
+        S.selectedIds.clear();
+        renderMessages();
+        loadUnreadCounts();
+        toast(`${r.data.updated} marcado(s) como no leídos`, 'success');
+    } else toast('Error', 'error');
+}
+
 /* ── Undo bar ──────────────────────────────────────────────────── */
 function showUndoBar(text, undoFn) {
     const old = document.getElementById('undo-bar');
@@ -492,7 +554,7 @@ async function renderViewer(msg) {
         `<a class="attachment-chip" href="/api/attachments/${a.id}/download" target="_blank" rel="noopener" onclick="dlAttachment(event,${a.id})">&#128206; ${escHtml(a.filename)}</a>`
     ).join('');
 
-    const previewHtml = buildPreviewHtml(m);
+    const previewHtml = await resolveInlineImages(buildPreviewHtml(m), m.attachments || []);
     const normalizedText = normalizeBodyTextForReply(m.body_text, m.body_html);
     const bodyHtml = previewHtml
         ? `<div class="viewer-body-html"><iframe srcdoc="${escHtml(previewHtml)}" sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation"></iframe></div>`
@@ -511,7 +573,7 @@ async function renderViewer(msg) {
                 <button class="btn-toolbar" onclick="replyTo('reply_all')">&#8617; Resp. todos</button>
                 <button class="btn-toolbar" onclick="replyTo('forward')">&#8618; Reenviar</button>
                 <button class="btn-toolbar danger" onclick="markAsSpam('${m.id}')">Marcar SPAM</button>
-                <button class="btn-toolbar" onclick="toggleRead('${m.id}', ${m.is_read})">${m.is_read ? 'No leido' : 'Leido'}</button>
+                <button class="btn-toolbar" data-toggleread="${m.id}" onclick="toggleRead('${m.id}', ${m.is_read})">${m.is_read ? 'No leído' : 'Leído'}</button>
                 <button class="btn-toolbar" onclick="toggleZenMode()" title="Modo zen">&#127769; Zen</button>
                 <button class="btn-toolbar danger" onclick="deleteMsg('${m.id}')">Eliminar</button>
             </div>
@@ -654,10 +716,19 @@ window.toggleStar = async function(e, id, current) {
 window.toggleRead = async function(id, current) {
     const r = await api('PUT', `/messages/${id}/read`, { is_read: !current });
     if (!r?.ok) { toast('Error', 'error'); return; }
+    const newRead = !current;
     const idx = S.messages.findIndex(m => m.id === id);
-    if (idx >= 0) S.messages[idx].is_read = !current;
-    if (S.activeMessage?.id === id) S.activeMessage.is_read = !current;
+    if (idx >= 0) S.messages[idx].is_read = newRead;
+    if (S.activeMessage?.id === id) S.activeMessage.is_read = newRead;
     renderMessages();
+    // Update button in viewer immediately without re-rendering entire viewer
+    document.querySelectorAll('.btn-toolbar[data-toggleread]').forEach(btn => {
+        if (btn.dataset.toggleread === String(id)) {
+            btn.textContent = newRead ? 'No leído' : 'Leído';
+            btn.setAttribute('onclick', `toggleRead('${id}', ${newRead})`);
+        }
+    });
+    loadUnreadCounts();
 };
 
 async function setMessageFolderByDrop(payload, targetFilter) {
@@ -1053,7 +1124,7 @@ window.openMessageLarge = async function(id) {
     const attachments = (m.attachments || []).map(a =>
         `<a class="attachment-chip" href="/api/attachments/${a.id}/download" target="_blank" rel="noopener" onclick="dlAttachment(event,${a.id})">&#128206; ${escHtml(a.filename)}</a>`
     ).join('');
-    const previewHtml = buildPreviewHtml(m);
+    const previewHtml = await resolveInlineImages(buildPreviewHtml(m), m.attachments || []);
     const normalizedText = normalizeBodyTextForReply(m.body_text, m.body_html);
     const body = previewHtml
         ? `<div class="viewer-body-html"><iframe srcdoc="${escHtml(previewHtml)}" sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation" style="height:60vh"></iframe></div>`
@@ -1071,7 +1142,7 @@ window.openMessageLarge = async function(id) {
                 <button class="btn-toolbar" onclick="replyTo('reply_all')">&#8617; Resp. todos</button>
                 <button class="btn-toolbar" onclick="replyTo('forward')">&#8618; Reenviar</button>
                 <button class="btn-toolbar danger" onclick="markAsSpam('${m.id}')">Marcar SPAM</button>
-                <button class="btn-toolbar" onclick="toggleRead('${m.id}', ${m.is_read})">${m.is_read ? 'No leido' : 'Leido'}</button>
+                <button class="btn-toolbar" data-toggleread="${m.id}" onclick="toggleRead('${m.id}', ${m.is_read})">${m.is_read ? 'No leído' : 'Leído'}</button>
                 <button class="btn-toolbar danger" onclick="deleteMsg('${m.id}')">Eliminar</button>
             </div>
             <div class="viewer-body" style="margin-top:1rem">${body}</div>
@@ -1141,24 +1212,36 @@ async function saveAccount() {
 }
 
 /* ── Contacts modal ────────────────────────────────────────────── */
-function openContactsModal() {
+async function openContactsModal() {
+    await loadContacts();
     renderContactsList();
     document.getElementById('modal-contacts').style.display = 'flex';
 }
 
-function renderContactsList() {
+function renderContactsList(filter = '') {
     const list = document.getElementById('contacts-list');
-    if (!S.contacts.length) { list.innerHTML = '<p style="color:var(--text-dim);font-size:.78rem;padding:.5rem 0">Sin contactos</p>'; return; }
-    list.innerHTML = S.contacts.map(c => `
+    const contacts = filter
+        ? S.contacts.filter(c => (c.name || '').toLowerCase().includes(filter.toLowerCase()) || c.email.toLowerCase().includes(filter.toLowerCase()))
+        : S.contacts;
+    if (!contacts.length) { list.innerHTML = `<p style="color:var(--text-dim);font-size:.78rem;padding:.5rem 0">${filter ? 'Sin resultados' : 'Sin contactos'}</p>`; return; }
+    list.innerHTML = contacts.map(c => `
         <div style="display:flex;align-items:center;justify-content:space-between;padding:.4rem .5rem;border-bottom:1px solid var(--border-light);font-size:.78rem">
-            <div>
-                <div style="color:var(--text-bright);font-weight:500">${escHtml(c.name || c.email)}</div>
+            <div style="flex:1;overflow:hidden">
+                <div style="color:var(--text-bright);font-weight:500;cursor:pointer" onclick="useContact('${escHtml(c.email)}')" title="Usar en redactar">${escHtml(c.name || c.email)}</div>
                 ${c.name ? `<div style="color:var(--text-dim);font-size:.7rem">${escHtml(c.email)}</div>` : ''}
             </div>
             <button class="btn-icon" onclick="deleteContact(${c.id})" title="Eliminar" style="font-size:.7rem;color:var(--danger)">&times;</button>
         </div>
     `).join('');
 }
+
+window.useContact = function(email) {
+    document.getElementById('modal-contacts').style.display = 'none';
+    openCompose('new');
+    setTimeout(() => {
+        addEmailTag('tags-compose-to', 'composeToEmails', email);
+    }, 100);
+};
 
 window.deleteContact = async function(id) {
     await api('DELETE', `/contacts/${id}`);
@@ -1624,6 +1707,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         window.toggleTheme();
         updateThemeLabel();
     });
+    document.getElementById('btn-font-decrease').addEventListener('click', e => {
+        e.stopPropagation();
+        setFontSize(getFontSize() - 1);
+    });
+    document.getElementById('btn-font-increase').addEventListener('click', e => {
+        e.stopPropagation();
+        setFontSize(getFontSize() + 1);
+    });
 
     // Search
     let searchTimer;
@@ -1646,6 +1737,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Contacts modal
     document.getElementById('btn-close-contacts').addEventListener('click', () => { document.getElementById('modal-contacts').style.display = 'none'; });
+    const contactsSearch = document.getElementById('contacts-search');
+    if (contactsSearch) {
+        contactsSearch.addEventListener('input', e => renderContactsList(e.target.value));
+    }
     document.getElementById('btn-add-contact').addEventListener('click', addContact);
 
     // Close modals on overlay click
@@ -1673,6 +1768,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('bulk-delete').addEventListener('click', bulkDelete);
     document.getElementById('bulk-spam').addEventListener('click', bulkMarkSpam);
     document.getElementById('bulk-mark-read').addEventListener('click', bulkMarkRead);
+    document.getElementById('bulk-mark-unread').addEventListener('click', bulkMarkUnread);
     document.getElementById('bulk-export').addEventListener('click', bulkExport);
     document.getElementById('bulk-clear').addEventListener('click', clearSelection);
     document.getElementById('bulk-move-select').addEventListener('change', e => {
