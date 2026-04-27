@@ -1096,15 +1096,11 @@ async function sendEmail() {
 
     if (r?.ok) {
         toast('Mensaje enviado', 'success');
-        // Check if recipients are in contacts, offer to add
         const allEmails = [...S.composeToEmails, ...S.composeCcEmails];
         const unknownEmails = allEmails.filter(e => !S.contacts.find(c => c.email === e.toLowerCase()));
         if (unknownEmails.length) {
-            const addThem = confirm('Agregar a contactos:\n' + unknownEmails.join('\n') + '?');
-            if (addThem) {
-                await api('POST', '/contacts/batch', { contacts: unknownEmails.map(e => ({ email: e, name: '' })) });
-                await loadContacts();
-            }
+            await api('POST', '/contacts/batch', { contacts: unknownEmails.map(e => ({ email: e, name: '' })) });
+            await loadContacts();
         }
         _composeDraft = null;
         document.getElementById('modal-compose').style.display = 'none';
@@ -1268,7 +1264,11 @@ async function addContact() {
         await loadContacts();
         renderContactsList();
         toast('Contacto anadido', 'success');
-    } else toast(r?.data?.error || 'Error', 'error');
+    } else {
+        const msg = r?.data?.message || r?.data?.error ||
+            (r?.data?.errors ? Object.values(r.data.errors).flat().join(' ') : 'Error al agregar contacto');
+        toast(msg, 'error');
+    }
 }
 
 /* ── AI health ─────────────────────────────────────────────────── */
