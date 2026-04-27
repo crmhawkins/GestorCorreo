@@ -1641,6 +1641,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             theme: 'snow', placeholder: 'Escribe tu mensaje...',
             modules: { toolbar: [['bold', 'italic', 'underline'], [{ list: 'ordered' }, { list: 'bullet' }], [{ align: [] }], ['clean']] },
         });
+        const qlEditor = document.querySelector('#compose-editor .ql-editor');
+        if (qlEditor) { qlEditor.setAttribute('spellcheck', 'true'); qlEditor.setAttribute('autocorrect', 'on'); }
     }
 
     // Contact autocomplete

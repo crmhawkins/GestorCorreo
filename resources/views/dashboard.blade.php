@@ -209,7 +209,7 @@
             </div>
             <div class="form-group">
                 <label>Asunto</label>
-                <input type="text" id="compose-subject" class="form-control" placeholder="Asunto">
+                <input type="text" id="compose-subject" class="form-control" placeholder="Asunto" spellcheck="true" autocorrect="on" autocapitalize="sentences">
             </div>
             <div class="form-group">
                 <label>Mensaje</label>
