@@ -14,6 +14,7 @@ RUN composer install --no-dev --optimize-autoloader --no-scripts --no-interactio
 COPY . .
 
 RUN composer dump-autoload --optimize --no-scripts \
+    && mkdir -p /var/www/html/bootstrap/cache /var/www/html/storage/logs /var/www/html/storage/framework/cache /var/www/html/storage/framework/sessions /var/www/html/storage/framework/views \
     && chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
 
 COPY docker/nginx.conf /etc/nginx/nginx.conf
