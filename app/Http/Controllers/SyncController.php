@@ -63,6 +63,7 @@ class SyncController extends Controller
 
         $validated = $request->validate([
             'account_id' => 'nullable|integer',
+            'full_sync'  => 'nullable|boolean',
         ]);
 
         $sse = [
@@ -115,8 +116,9 @@ class SyncController extends Controller
         }
 
         $syncService = $this->syncService;
+        $fullSync    = !empty($validated['full_sync']);
 
-        return response()->stream(function () use ($accountsWithPass, $syncService, $emit) {
+        return response()->stream(function () use ($accountsWithPass, $syncService, $emit, $fullSync) {
             $totalAccounts = count($accountsWithPass);
 
             foreach ($accountsWithPass as $i => $item) {
@@ -131,7 +133,7 @@ class SyncController extends Controller
                     continue;
                 }
 
-                foreach ($syncService->syncAccountStreaming($account, $item['password']) as $progress) {
+                foreach ($syncService->syncAccountStreaming($account, $item['password'], $fullSync) as $progress) {
                     $emit($progress);
                     if (($progress['status'] ?? '') === 'error' && $totalAccounts > 1) {
                         break;

@@ -490,23 +490,23 @@ class SyncService
      *
      * @return \Generator
      */
-    public function syncAccountStreaming(Account $account, string $password): \Generator
+    public function syncAccountStreaming(Account $account, string $password, bool $fullSync = false): \Generator
     {
         $protocol = $this->resolveProtocol($account);
 
-        yield ['status' => 'connecting', 'message' => "Conectando a {$account->imap_host}..."];
+        yield ['status' => 'connecting', 'message' => "Conectando a {$account->imap_host}..." . ($fullSync ? ' (descarga completa)' : '')];
 
         if ($protocol === 'pop3') {
-            yield from $this->syncPop3Streaming($account, $password);
+            yield from $this->syncPop3Streaming($account, $password, $fullSync);
         } else {
-            yield from $this->syncImapStreaming($account, $password);
+            yield from $this->syncImapStreaming($account, $password, $fullSync);
         }
     }
 
     /**
      * Generator de streaming para POP3.
      */
-    private function syncPop3Streaming(Account $account, string $password): \Generator
+    private function syncPop3Streaming(Account $account, string $password, bool $fullSync = false): \Generator
     {
         set_time_limit(600);
         ini_set('memory_limit', '512M');
@@ -521,7 +521,7 @@ class SyncService
             yield ['status' => 'downloading', 'current' => 0, 'total' => 0, 'message' => 'Obteniendo lista de mensajes...'];
 
             // UIDs ya descargados — fuente de verdad: la propia BD (campo imap_uid)
-            $downloadedUids = Message::where('account_id', $account->id)
+            $downloadedUids = $fullSync ? [] : Message::where('account_id', $account->id)
                 ->whereNotNull('imap_uid')
                 ->pluck('imap_uid')
                 ->flip()
@@ -690,7 +690,7 @@ class SyncService
     /**
      * Generator de streaming para IMAP.
      */
-    private function syncImapStreaming(Account $account, string $password): \Generator
+    private function syncImapStreaming(Account $account, string $password, bool $fullSync = false): \Generator
     {
         set_time_limit(600);
         ini_set('memory_limit', '512M');
@@ -704,7 +704,7 @@ class SyncService
 
             $imap->selectFolder('INBOX');
 
-            $lastUid = (int) Message::where('account_id', $account->id)
+            $lastUid = $fullSync ? 0 : (int) Message::where('account_id', $account->id)
                 ->whereNotNull('imap_uid')
                 ->where('imap_uid', 'REGEXP', '^[0-9]+$')
                 ->max(\Illuminate\Support\Facades\DB::raw('CAST(imap_uid AS UNSIGNED)'));

@@ -35,6 +35,15 @@
                                 Plantillas
                             </button>
                             <div class="settings-dropdown-divider"></div>
+                            <button class="settings-dropdown-item" id="btn-full-sync">
+                                <svg viewBox="0 0 20 20" fill="currentColor" style="width:14px;height:14px;flex-shrink:0"><path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v4a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd"/></svg>
+                                Descarga completa
+                            </button>
+                            <button class="settings-dropdown-item" id="btn-retention-settings">
+                                <svg viewBox="0 0 20 20" fill="currentColor" style="width:14px;height:14px;flex-shrink:0"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd"/></svg>
+                                Retención y limpieza
+                            </button>
+                            <div class="settings-dropdown-divider"></div>
                             <button class="settings-dropdown-item" id="btn-toggle-theme">
                                 <svg viewBox="0 0 20 20" fill="currentColor" style="width:14px;height:14px;flex-shrink:0"><path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"/></svg>
                                 <span id="theme-label">Modo claro</span>
@@ -142,14 +151,14 @@
                 </div>
                 <div class="bulk-bar" id="bulk-bar">
                     <span class="bulk-bar-count" id="bulk-bar-count">0</span>
-                    <span>seleccionados</span>
-                    <span class="bulk-bar-spacer"></span>
-                    <button class="btn-toolbar" id="bulk-mark-read">Leidos</button>
-                    <button class="btn-toolbar" id="bulk-mark-unread">No leído</button>
-                    <select class="btn-toolbar" id="bulk-move-select" title="Mover a">
-                        <option value="">Mover a...</option>
+                    <span>sel.</span>
+                    <button class="btn-toolbar" id="bulk-mark-read" title="Marcar seleccionados como leídos">Leídos</button>
+                    <button class="btn-toolbar" id="bulk-mark-unread" title="Marcar seleccionados como no leídos">No leído</button>
+                    <button class="btn-toolbar" id="btn-mark-all-read-bulk" title="Marcar TODOS como leídos" onclick="markAllRead()">Leer todo</button>
+                    <select class="btn-toolbar" id="bulk-move-select" title="Mover a" style="max-width:90px">
+                        <option value="">Mover...</option>
                     </select>
-                    <button class="btn-toolbar" id="bulk-export" title="Exportar como .eml/.zip">Exportar</button>
+                    <button class="btn-toolbar" id="bulk-export" title="Exportar">Exportar</button>
                     <button class="btn-toolbar danger" id="bulk-spam">SPAM</button>
                     <button class="btn-toolbar danger" id="bulk-delete">Eliminar</button>
                     <button class="btn-toolbar" id="bulk-clear">&#10005;</button>
@@ -330,6 +339,39 @@
             </div>
             <input type="search" id="contacts-search" class="form-control" placeholder="Buscar contacto..." style="margin-bottom:.5rem" autocomplete="off">
             <div id="contacts-list" style="max-height:320px;overflow-y:auto"></div>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL: Retención y limpieza -->
+<div class="modal-overlay" id="modal-retention" style="display:none">
+    <div class="modal-box" style="max-width:440px">
+        <div class="modal-header">
+            <h3>Retención y limpieza</h3>
+            <button class="btn-icon" id="btn-close-retention">&#10005;</button>
+        </div>
+        <div class="modal-body">
+            <p class="form-section-title">Limpieza automática local</p>
+            <div class="form-group">
+                <label>Eliminar SPAM después de (días)</label>
+                <input type="number" id="ret-spam-days" class="form-control" value="7" min="0" max="365" placeholder="0 = nunca">
+                <small style="color:var(--text-dim);font-size:.72rem">0 = nunca eliminar automáticamente</small>
+            </div>
+            <div class="form-group">
+                <label>Purgar Eliminados después de (días)</label>
+                <input type="number" id="ret-deleted-days" class="form-control" value="7" min="0" max="365" placeholder="0 = nunca">
+            </div>
+            <hr class="form-divider">
+            <p class="form-section-title">Servidor de correo</p>
+            <div class="form-group">
+                <label>Eliminar del servidor después de (días)</label>
+                <input type="number" id="ret-server-days" class="form-control" value="0" min="0" max="365" placeholder="0 = conservar en servidor">
+                <small style="color:var(--text-dim);font-size:.72rem">Los correos se guardan aquí siempre. 0 = nunca borrar del servidor.</small>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn-secondary" id="btn-close-retention">Cancelar</button>
+            <button class="btn-primary" id="btn-save-retention">Guardar</button>
         </div>
     </div>
 </div>

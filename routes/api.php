@@ -70,6 +70,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::patch('/messages/{id}',                [App\Http\Controllers\MessageController::class, 'patch']);       // alias FastAPI
     Route::delete('/messages/{id}',               [App\Http\Controllers\MessageController::class, 'destroy']);
     Route::patch('/messages/mark-all-read',       [App\Http\Controllers\MessageController::class, 'markAllRead']);
+    Route::delete('/messages/purge-old',          [App\Http\Controllers\MessageController::class, 'purgeOld']);
     Route::post('/messages/bulk/delete',          [App\Http\Controllers\MessageController::class, 'bulkDelete']);
     Route::post('/messages/bulk/classify',        [App\Http\Controllers\MessageController::class, 'bulkClassify']);
     Route::post('/messages/bulk/flags',           [App\Http\Controllers\MessageController::class, 'bulkFlags']);

@@ -184,8 +184,12 @@ function buildPreviewHtml(message) {
         const url = match?.id ? `/api/attachments/${match.id}/download` : firstImg;
         return url ? `src=${q}${url}${q}` : full;
     });
-    // Ensure all links open in new tab + inject readable base styles
-    const baseInject = '<base target="_blank" rel="noopener noreferrer"><style>html,body{background:#fff!important;color:#1a1a1a}img{max-width:100%;height:auto}a{color:#2563eb}</style>';
+    const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
+    const bg = isDark ? '#1a1d26' : '#ffffff';
+    const fg = isDark ? '#d4d8e6' : '#1a1a1a';
+    const link = isDark ? '#60a5fa' : '#2563eb';
+    const codeBg = isDark ? '#252836' : '#f4f4f4';
+    const baseInject = `<base target="_blank" rel="noopener noreferrer"><style>html,body{background:${bg}!important;color:${fg}!important}img{max-width:100%;height:auto}a{color:${link}}</style>`;
     if (/<html/i.test(html)) {
         if (/<head(\s[^>]*)?>/i.test(html)) {
             html = html.replace(/<head(\s[^>]*)?>/i, (m) => m + baseInject);
@@ -193,7 +197,7 @@ function buildPreviewHtml(message) {
             html = html.replace(/<html(\s[^>]*)?>/i, (m) => m + `<head>${baseInject}</head>`);
         }
     } else {
-        html = `<!DOCTYPE html><html><head><base target="_blank" rel="noopener noreferrer"><meta charset="utf-8"><style>html,body{background:#fff;color:#1a1a1a;font-family:system-ui,sans-serif;font-size:14px;line-height:1.6;word-break:break-word;max-width:100%;padding:12px;margin:0}img{max-width:100%;height:auto}a{color:#2563eb}pre,code{background:#f4f4f4;padding:2px 4px;border-radius:3px;font-size:13px}</style></head><body>${html}</body></html>`;
+        html = `<!DOCTYPE html><html><head><base target="_blank" rel="noopener noreferrer"><meta charset="utf-8"><style>html,body{background:${bg};color:${fg};font-family:system-ui,sans-serif;font-size:14px;line-height:1.6;word-break:break-word;max-width:100%;padding:12px;margin:0}img{max-width:100%;height:auto}a{color:${link}}pre,code{background:${codeBg};padding:2px 4px;border-radius:3px;font-size:13px}</style></head><body>${html}</body></html>`;
     }
     return html;
 }
@@ -582,6 +586,21 @@ async function renderViewer(msg) {
             ${attachments ? `<div class="viewer-attachments"><h4>Adjuntos</h4>${attachments}</div>` : ''}
         </div>`;
 
+    const viewerIframe = viewer.querySelector('.viewer-body-html iframe');
+    if (viewerIframe) {
+        const resizeIframe = () => {
+            try {
+                const doc = viewerIframe.contentDocument || viewerIframe.contentWindow?.document;
+                if (doc && doc.documentElement) {
+                    const h = Math.max(doc.documentElement.scrollHeight, doc.body?.scrollHeight || 0);
+                    if (h > 0) viewerIframe.style.height = (h + 32) + 'px';
+                }
+            } catch(e) {}
+        };
+        viewerIframe.addEventListener('load', resizeIframe);
+        setTimeout(resizeIframe, 400);
+    }
+
     if (!m.is_read) {
         const markRes = await api('PUT', `/messages/${m.id}/read`, { is_read: true });
         if (markRes?.ok) {
@@ -832,16 +851,17 @@ window.dlAttachment = async function(e, id) {
 };
 
 /* ── Sync ───────────────────────────────────────────────────────── */
-async function doSync() {
+async function doSync(options = {}) {
     if (S.syncing) return;
     S.syncing = true;
     const btn = document.getElementById('btn-sync');
     btn.disabled = true; btn.classList.add('syncing');
     const statusEl = document.getElementById('sync-status');
-    statusEl.style.display = ''; statusEl.innerHTML = 'Iniciando...';
+    statusEl.style.display = ''; statusEl.innerHTML = options.full_sync ? 'Descarga completa...' : 'Iniciando...';
 
     try {
         const body = S.selectedAccount ? { account_id: S.selectedAccount } : {};
+        if (options.full_sync) body.full_sync = true;
         const res = await fetch('/api/sync/stream', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${S.token}` },
@@ -1279,6 +1299,36 @@ async function refreshAiHealth() {
     const up = !!(r?.ok && r.data?.available);
     dot.style.background = up ? '#22c55e' : '#ef4444';
     dot.title = up ? 'IA operativa' : ('IA no disponible: ' + (r?.data?.reason || ''));
+}
+
+/* ── Retention settings ─────────────────────────────────────────── */
+function getRetentionSettings() {
+    try { return JSON.parse(localStorage.getItem('retention_settings') || '{"spam_days":7,"deleted_days":7,"server_delete_days":0}'); }
+    catch { return { spam_days: 7, deleted_days: 7, server_delete_days: 0 }; }
+}
+function saveRetentionSettings() {
+    const s = {
+        spam_days: parseInt(document.getElementById('ret-spam-days')?.value || '7'),
+        deleted_days: parseInt(document.getElementById('ret-deleted-days')?.value || '7'),
+        server_delete_days: parseInt(document.getElementById('ret-server-days')?.value || '0'),
+    };
+    localStorage.setItem('retention_settings', JSON.stringify(s));
+    document.getElementById('modal-retention').style.display = 'none';
+    toast('Configuración guardada', 'success');
+    applyRetentionPolicies();
+}
+function openRetentionModal() {
+    document.getElementById('settings-dropdown').classList.remove('open');
+    const s = getRetentionSettings();
+    document.getElementById('ret-spam-days').value = s.spam_days;
+    document.getElementById('ret-deleted-days').value = s.deleted_days;
+    document.getElementById('ret-server-days').value = s.server_delete_days;
+    document.getElementById('modal-retention').style.display = 'flex';
+}
+async function applyRetentionPolicies() {
+    const s = getRetentionSettings();
+    if (s.spam_days > 0) await api('DELETE', `/messages/purge-old?folder=SPAM&older_than_days=${s.spam_days}`);
+    if (s.deleted_days > 0) await api('DELETE', `/messages/purge-old?folder=deleted&older_than_days=${s.deleted_days}`);
 }
 
 /* ── Mark all read ─────────────────────────────────────────────── */
@@ -1857,6 +1907,24 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Folder events
     bindFolderEvents();
+
+    // Retention modal
+    const btnRetention = document.getElementById('btn-retention-settings');
+    if (btnRetention) btnRetention.addEventListener('click', openRetentionModal);
+    const btnSaveRetention = document.getElementById('btn-save-retention');
+    if (btnSaveRetention) btnSaveRetention.addEventListener('click', saveRetentionSettings);
+    const btnCloseRetention = document.getElementById('btn-close-retention');
+    if (btnCloseRetention) btnCloseRetention.addEventListener('click', () => { document.getElementById('modal-retention').style.display = 'none'; });
+
+    // Full sync button
+    const btnFullSync = document.getElementById('btn-full-sync');
+    if (btnFullSync) btnFullSync.addEventListener('click', () => {
+        document.getElementById('settings-dropdown').classList.remove('open');
+        doSync({ full_sync: true });
+    });
+
+    // Apply retention on load
+    applyRetentionPolicies();
 
     // Auto-sync every 5 min
     if (S.autoSyncTimer) clearInterval(S.autoSyncTimer);

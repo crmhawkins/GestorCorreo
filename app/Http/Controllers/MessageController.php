@@ -563,4 +563,35 @@ class MessageController extends Controller
 
         return response()->json(['updated' => $updated]);
     }
+
+    /**
+     * DELETE /messages/purge-old?folder=SPAM&older_than_days=7
+     */
+    public function purgeOld(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $folder = $request->query('folder', 'SPAM');
+        $days   = max(1, (int) $request->query('older_than_days', 7));
+
+        $accountIds = Account::where('user_id', $user->id)
+            ->where('is_deleted', false)
+            ->pluck('id');
+
+        $cutoff = now()->subDays($days);
+
+        $query = Message::whereIn('account_id', $accountIds)
+            ->where('created_at', '<', $cutoff);
+
+        if ($folder === 'SPAM') {
+            $query->where('classification_label', 'SPAM');
+        } elseif ($folder === 'deleted') {
+            $query->where('is_deleted', true);
+        } else {
+            $query->where('classification_label', $folder);
+        }
+
+        $deleted = $query->delete();
+
+        return response()->json(['deleted' => $deleted]);
+    }
 }

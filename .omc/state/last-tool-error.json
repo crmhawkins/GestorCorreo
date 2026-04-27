@@ -1,0 +1,7 @@
+{
+  "tool_name": "Bash",
+  "tool_input_preview": "{\"command\":\"scp -i ~/.ssh/hawcert_dani -o StrictHostKeyChecking=no \\\\\\n  \\\"C:/Users/Dani-Mefle/Documents/GitHub/GestorCorreo/public/js/mail.js\\\" \\\\\\n  dani@217.160.39.81:/tmp/mail.js\",\"description\":\"U...",
+  "error": "Exit code 1\nscp: dest open \"/tmp/mail.js\": Permission denied\r\nscp: failed to upload file C:/Users/Dani-Mefle/Documents/GitHub/GestorCorreo/public/js/mail.js to /tmp/mail.js",
+  "timestamp": "2026-04-27T11:50:23.696Z",
+  "retry_count": 1
+}
