@@ -11,7 +11,7 @@
     <link rel="stylesheet" href="/css/mail.css">
     <link rel="stylesheet" href="https://cdn.quilljs.com/1.3.7/quill.snow.css">
     <script>
-        const theme = localStorage.getItem('theme') || 'dark';
+        const theme = localStorage.getItem('theme') || 'light';
         document.documentElement.setAttribute('data-theme', theme);
     </script>
     @stack('styles')
@@ -20,7 +20,7 @@
     @yield('content')
     <script>
         window.toggleTheme = function() {
-            const current = document.documentElement.getAttribute('data-theme') || 'dark';
+            const current = document.documentElement.getAttribute('data-theme') || 'light';
             const next = current === 'dark' ? 'light' : 'dark';
             document.documentElement.setAttribute('data-theme', next);
             localStorage.setItem('theme', next);

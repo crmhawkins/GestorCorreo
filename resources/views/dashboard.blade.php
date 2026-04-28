@@ -117,7 +117,7 @@
                 <div class="search-toolbar">
                     <div class="search-wrap" style="flex:1">
                         <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd"/></svg>
-                        <input type="search" id="search-input" class="search-input" placeholder="Buscar por asunto, remitente o contenido..." autocomplete="off">
+                        <input type="search" id="search-input" class="search-input" placeholder="Buscar por asunto, remitente o contenido..." autocomplete="off" readonly>
                     </div>
                     <button class="btn-save-search" id="btn-save-search" title="Guardar busqueda actual">+ Guardar</button>
                     <div class="search-wrap">

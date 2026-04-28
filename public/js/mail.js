@@ -46,12 +46,8 @@ function applyFontSize(size) {
 }
 function getFontSize() {
     const saved = localStorage.getItem('font_size');
-    if (saved === '14' && !localStorage.getItem('font_size_v19_bumped')) {
-        localStorage.setItem('font_size_v19_bumped', '1');
-        localStorage.setItem('font_size', '15');
-        return 15;
-    }
-    return parseInt(saved || '15');
+    if (!saved) return 17;
+    return parseInt(saved);
 }
 function setFontSize(size) {
     size = Math.max(13, Math.min(22, size));
@@ -1699,8 +1695,14 @@ function promptMailPassword() {
 /* ── Init ──────────────────────────────────────────────────────── */
 document.addEventListener('DOMContentLoaded', async () => {
     const si = document.getElementById('search-input');
-    if (si?.value) { si.value = ''; S.search = ''; }
-    setTimeout(() => { if (si?.value) { si.value = ''; S.search = ''; } }, 200);
+    if (si) {
+        si.value = '';
+        S.search = '';
+        si.setAttribute('readonly', '');
+        const unlockSearch = () => { si.removeAttribute('readonly'); si.focus(); };
+        si.addEventListener('mousedown', unlockSearch);
+        si.addEventListener('focus', unlockSearch);
+    }
 
     updateThemeLabel();
 
