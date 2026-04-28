@@ -61,20 +61,20 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/admin/accounts/{id}',    [App\Http\Controllers\AccountController::class, 'updateAdmin']);
     Route::delete('/admin/accounts/{id}', [App\Http\Controllers\AccountController::class, 'destroyAdmin']);
 
-    // Messages
+    // Messages — rutas estáticas ANTES de las con {id}
     Route::get('/messages',                       [App\Http\Controllers\MessageController::class, 'index']);
     Route::get('/messages/unread-counts',         [App\Http\Controllers\MessageController::class, 'unreadCounts']);
-    Route::get('/messages/{id}',                  [App\Http\Controllers\MessageController::class, 'show']);
-    Route::put('/messages/{id}/read',             [App\Http\Controllers\MessageController::class, 'markRead']);
-    Route::put('/messages/{id}/flags',            [App\Http\Controllers\MessageController::class, 'updateFlags']); // alias FastAPI
-    Route::patch('/messages/{id}',                [App\Http\Controllers\MessageController::class, 'patch']);       // alias FastAPI
-    Route::delete('/messages/{id}',               [App\Http\Controllers\MessageController::class, 'destroy']);
     Route::patch('/messages/mark-all-read',       [App\Http\Controllers\MessageController::class, 'markAllRead']);
     Route::delete('/messages/purge-old',          [App\Http\Controllers\MessageController::class, 'purgeOld']);
     Route::post('/messages/bulk/delete',          [App\Http\Controllers\MessageController::class, 'bulkDelete']);
     Route::post('/messages/bulk/classify',        [App\Http\Controllers\MessageController::class, 'bulkClassify']);
     Route::post('/messages/bulk/flags',           [App\Http\Controllers\MessageController::class, 'bulkFlags']);
     Route::post('/messages/bulk/export',          [App\Http\Controllers\MessageController::class, 'bulkExport']);
+    Route::get('/messages/{id}',                  [App\Http\Controllers\MessageController::class, 'show']);
+    Route::put('/messages/{id}/read',             [App\Http\Controllers\MessageController::class, 'markRead']);
+    Route::put('/messages/{id}/flags',            [App\Http\Controllers\MessageController::class, 'updateFlags']); // alias FastAPI
+    Route::patch('/messages/{id}',                [App\Http\Controllers\MessageController::class, 'patch']);       // alias FastAPI
+    Route::delete('/messages/{id}',               [App\Http\Controllers\MessageController::class, 'destroy']);
     Route::put('/messages/{id}/classify',         [App\Http\Controllers\ClassifyController::class, 'updateLabel']);
     Route::get('/classifications/{messageId}',    [App\Http\Controllers\ClassifyController::class, 'show']);
 
