@@ -1,8 +1,8 @@
 /**
- * Hawkins Mail v.18 – Vanilla JS frontend
+ * Hawkins Mail v.19 – Vanilla JS frontend
  * Calls the existing Laravel API at /api/*
  */
-console.log('%c Hawkins Mail v.18', 'color:#3b82f6;font-size:14px;font-weight:bold');
+console.log('%c Hawkins Mail v.19', 'color:#3b82f6;font-size:14px;font-weight:bold');
 
 /* ── State ──────────────────────────────────────────────────────── */
 const S = {
@@ -44,9 +44,17 @@ function applyFontSize(size) {
     const lbl = document.getElementById('font-size-label');
     if (lbl) lbl.textContent = size;
 }
-function getFontSize() { return parseInt(localStorage.getItem('font_size') || '14'); }
+function getFontSize() {
+    const saved = localStorage.getItem('font_size');
+    if (saved === '14' && !localStorage.getItem('font_size_v19_bumped')) {
+        localStorage.setItem('font_size_v19_bumped', '1');
+        localStorage.setItem('font_size', '15');
+        return 15;
+    }
+    return parseInt(saved || '15');
+}
 function setFontSize(size) {
-    size = Math.max(11, Math.min(22, size));
+    size = Math.max(13, Math.min(22, size));
     localStorage.setItem('font_size', size);
     applyFontSize(size);
 }
@@ -436,6 +444,9 @@ function renderBulkBar() {
     bar.classList.toggle('visible', count > 0);
     document.getElementById('bulk-bar-count').textContent = String(count);
 
+    const selectBar = document.querySelector('.list-select-bar');
+    if (selectBar) selectBar.style.display = count > 0 ? 'none' : '';
+
     // Populate move-to dropdown with categories + builtins
     const moveSelect = document.getElementById('bulk-move-select');
     if (moveSelect && count > 0) {
@@ -574,13 +585,13 @@ async function renderViewer(msg) {
                 <div><strong>Fecha:</strong> ${new Date(m.date).toLocaleString('es-ES')}</div>
             </div>
             <div class="viewer-actions">
-                <button class="btn-toolbar" onclick="replyTo('reply')">&#8617; Responder</button>
+                <button class="btn-toolbar primary" onclick="replyTo('reply')">&#8617; Responder</button>
                 <button class="btn-toolbar" onclick="replyTo('reply_all')">&#8617; Resp. todos</button>
                 <button class="btn-toolbar" onclick="replyTo('forward')">&#8618; Reenviar</button>
-                <button class="btn-toolbar danger" onclick="markAsSpam('${m.id}')">Marcar SPAM</button>
                 <button class="btn-toolbar" data-toggleread="${m.id}" onclick="toggleRead('${m.id}', ${m.is_read})">${m.is_read ? 'No leído' : 'Leído'}</button>
                 <button class="btn-toolbar" onclick="toggleZenMode()" title="Modo zen">&#127769; Zen</button>
-                <button class="btn-toolbar danger" onclick="deleteMsg('${m.id}')">Eliminar</button>
+                <button class="btn-toolbar danger" onclick="markAsSpam('${m.id}')">SPAM</button>
+                <button class="btn-toolbar danger btn-delete-mail" onclick="deleteMsg('${m.id}')">&#128465; Eliminar</button>
             </div>
             <div class="viewer-body">${bodyHtml}</div>
             ${attachments ? `<div class="viewer-attachments"><h4>Adjuntos</h4>${attachments}</div>` : ''}
@@ -1162,12 +1173,12 @@ window.openMessageLarge = async function(id) {
                 <div><strong>Fecha:</strong> ${m.date ? new Date(m.date).toLocaleString('es-ES') : ''}</div>
             </div>
             <div class="viewer-actions">
-                <button class="btn-toolbar" onclick="replyTo('reply')">&#8617; Responder</button>
+                <button class="btn-toolbar primary" onclick="replyTo('reply')">&#8617; Responder</button>
                 <button class="btn-toolbar" onclick="replyTo('reply_all')">&#8617; Resp. todos</button>
                 <button class="btn-toolbar" onclick="replyTo('forward')">&#8618; Reenviar</button>
-                <button class="btn-toolbar danger" onclick="markAsSpam('${m.id}')">Marcar SPAM</button>
                 <button class="btn-toolbar" data-toggleread="${m.id}" onclick="toggleRead('${m.id}', ${m.is_read})">${m.is_read ? 'No leído' : 'Leído'}</button>
-                <button class="btn-toolbar danger" onclick="deleteMsg('${m.id}')">Eliminar</button>
+                <button class="btn-toolbar danger" onclick="markAsSpam('${m.id}')">SPAM</button>
+                <button class="btn-toolbar danger btn-delete-mail" onclick="deleteMsg('${m.id}')">&#128465; Eliminar</button>
             </div>
             <div class="viewer-body" style="margin-top:1rem">${body}</div>
             ${attachments ? `<div class="viewer-attachments"><h4>Adjuntos</h4>${attachments}</div>` : ''}
