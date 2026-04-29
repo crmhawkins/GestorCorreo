@@ -611,12 +611,10 @@ class MessageController extends Controller
         $query = Message::whereIn('account_id', $accountIds)
             ->where('created_at', '<', $cutoff);
 
-        if ($folder === 'SPAM') {
-            $query->where('classification_label', 'SPAM');
-        } elseif ($folder === 'deleted') {
-            $query->where('is_deleted', true);
+        if ($folder === 'deleted') {
+            $query->where('folder', 'deleted');
         } else {
-            $query->where('classification_label', $folder);
+            $query->whereHas('classification', fn($q) => $q->where('final_label', $folder));
         }
 
         $deleted = $query->delete();
@@ -636,12 +634,10 @@ class MessageController extends Controller
         $query = Message::with('attachments', 'classification')
             ->whereIn('account_id', $accountIds);
 
-        if ($folder === 'SPAM') {
-            $query->where('classification_label', 'SPAM');
-        } elseif ($folder === 'deleted') {
-            $query->where('is_deleted', true);
+        if ($folder === 'deleted') {
+            $query->where('folder', 'deleted');
         } else {
-            $query->where('classification_label', $folder);
+            $query->whereHas('classification', fn($q) => $q->where('final_label', $folder));
         }
 
         $messages = $query->get();
@@ -692,15 +688,12 @@ class MessageController extends Controller
             ->where('is_deleted', false)
             ->pluck('id');
 
-        $query = Message::whereIn('account_id', $accountIds)
-            ->where('is_deleted', false);
+        $query = Message::whereIn('account_id', $accountIds);
 
-        if ($folder === 'SPAM') {
-            $query->where('classification_label', 'SPAM');
-        } elseif ($folder === 'deleted') {
-            $query->withoutGlobalScopes()->whereIn('account_id', $accountIds)->where('is_deleted', true);
+        if ($folder === 'deleted') {
+            $query->where('folder', 'deleted');
         } elseif ($folder !== 'all') {
-            $query->where('classification_label', $folder);
+            $query->whereHas('classification', fn($q) => $q->where('final_label', $folder));
         }
 
         $messages = $query->orderBy('date', 'desc')->limit(500)->get();
