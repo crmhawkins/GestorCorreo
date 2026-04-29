@@ -165,7 +165,7 @@ class ImapService
                 'from_email'   => (string)($message->getFrom()[0]->mail ?? ''),
                 'to_addresses' => json_encode($this->parseAddresses($message->getTo())),
                 'cc_addresses'   => json_encode($this->parseAddresses($message->getCc())),
-                'date'         => Carbon::parse($message->getDate()),
+                'date'         => Carbon::parse($message->getDate())->utc(),
                 'snippet'      => '',
             ];
         } catch (\Exception $e) {
