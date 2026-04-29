@@ -225,7 +225,7 @@ class SyncService
 
                     // Fallback dedup: subject + from_email + date (±1h)
                     if (!empty($msgData['from_email']) && !empty($msgData['subject']) && !empty($msgData['date'])) {
-                        $msgDate = Carbon::parse($msgData['date']);
+                        $msgDate = Carbon::parse($msgData['date'])->utc();
                         $fallbackExisting = Message::where('account_id', $account->id)
                             ->where('from_email', $this->safeText($msgData['from_email'], 255))
                             ->where('subject', $this->safeText($msgData['subject'], 500))
@@ -253,7 +253,7 @@ class SyncService
                         'from_email'      => $this->safeText($msgData['from_email'] ?? '', 255),
                         'to_addresses'    => $msgData['to_addresses'] ?? '[]',
                         'cc_addresses'    => $msgData['cc_addresses'] ?? '[]',
-                        'date'            => Carbon::parse($msgData['date']),
+                        'date'            => Carbon::parse($msgData['date'])->utc(),
                         'snippet'         => $this->safeText($msgData['snippet']   ?? '', 200),
                         'folder'          => 'INBOX',
                         'body_text'       => $this->safeBody($msgData['body_text'] ?? ''),
@@ -613,7 +613,7 @@ class SyncService
 
                     // Fallback dedup: subject + from_email + date (±1h) — prevents re-download if UIDL regenerated
                     if (!empty($msgData['from_email']) && !empty($msgData['subject']) && !empty($msgData['date'])) {
-                        $msgDate = Carbon::parse($msgData['date']);
+                        $msgDate = Carbon::parse($msgData['date'])->utc();
                         $fallbackExisting = Message::where('account_id', $account->id)
                             ->where('from_email', $this->safeText($msgData['from_email'], 255))
                             ->where('subject', $this->safeText($msgData['subject'], 500))
@@ -641,7 +641,7 @@ class SyncService
                         'from_email'      => $this->safeText($msgData['from_email'] ?? '', 255),
                         'to_addresses'    => $msgData['to_addresses'] ?? '[]',
                         'cc_addresses'    => $msgData['cc_addresses'] ?? '[]',
-                        'date'            => Carbon::parse($msgData['date']),
+                        'date'            => Carbon::parse($msgData['date'])->utc(),
                         'snippet'         => $this->safeText($msgData['snippet']   ?? '', 200),
                         'folder'          => 'INBOX',
                         'body_text'       => $this->safeBody($msgData['body_text'] ?? ''),
