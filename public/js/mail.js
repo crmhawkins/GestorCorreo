@@ -311,7 +311,7 @@ async function loadUnreadCounts() {
 }
 
 /* ── Render: messages ──────────────────────────────────────────── */
-function renderMessages() {
+function renderMessages(prevCount = 0) {
     const container = document.getElementById('messages-container');
     if (!S.messages.length) {
         container.innerHTML = '<div class="empty-state"><p>Sin mensajes</p><p class="hint">Pulsa Sincronizar para descargar</p></div>';
@@ -355,37 +355,47 @@ function renderMessages() {
         </div>`;
     };
 
-    if (S.conversationView) {
-        const grouped = groupConversations(S.messages);
-        container.innerHTML = grouped.map(g => renderRow(g.msg, { isHead: g.isHead, isChild: g.isChild, count: g.count, key: g.key })).join('');
+    const bindRows = (scope) => {
+        scope.querySelectorAll('.msg-checkbox').forEach(cb => {
+            cb.addEventListener('click', e => {
+                e.stopPropagation();
+                handleCheckboxClick(cb.dataset.id, e.shiftKey);
+            });
+        });
+        scope.querySelectorAll('.message-item').forEach(row => {
+            row.addEventListener('click', e => {
+                if (e.target.closest('.msg-checkbox') || e.target.closest('.btn-star')) return;
+                if (S.conversationView && row.classList.contains('thread-head') && row.dataset.thread) {
+                    toggleThread(row.dataset.thread);
+                    return;
+                }
+                openMessage(row.dataset.id);
+            });
+            row.addEventListener('dblclick', e => {
+                if (e.target.closest('.msg-checkbox')) return;
+                openMessageLarge(row.dataset.id);
+            });
+        });
+    };
+
+    if (prevCount > 0 && !S.conversationView) {
+        // Append only new rows — preserva scroll position
+        const newMsgs = S.messages.slice(prevCount);
+        const frag = document.createDocumentFragment();
+        const tmp = document.createElement('div');
+        tmp.innerHTML = newMsgs.map(m => renderRow(m)).join('');
+        while (tmp.firstChild) frag.appendChild(tmp.firstChild);
+        container.appendChild(frag);
+        bindRows(container);
     } else {
-        container.innerHTML = S.messages.map(m => renderRow(m)).join('');
+        if (S.conversationView) {
+            const grouped = groupConversations(S.messages);
+            container.innerHTML = grouped.map(g => renderRow(g.msg, { isHead: g.isHead, isChild: g.isChild, count: g.count, key: g.key })).join('');
+        } else {
+            container.innerHTML = S.messages.map(m => renderRow(m)).join('');
+        }
+        bindRows(container);
     }
-
-    // Bind checkbox clicks (with shift-range support)
-    container.querySelectorAll('.msg-checkbox').forEach(cb => {
-        cb.addEventListener('click', e => {
-            e.stopPropagation();
-            handleCheckboxClick(cb.dataset.id, e.shiftKey);
-        });
-    });
-
-    // Bind row click to open message (but not when clicking checkbox/star)
-    container.querySelectorAll('.message-item').forEach(row => {
-        row.addEventListener('click', e => {
-            if (e.target.closest('.msg-checkbox') || e.target.closest('.btn-star')) return;
-            // Thread head → toggle expand instead of opening
-            if (S.conversationView && row.classList.contains('thread-head') && row.dataset.thread) {
-                toggleThread(row.dataset.thread);
-                return;
-            }
-            openMessage(row.dataset.id);
-        });
-        row.addEventListener('dblclick', e => {
-            if (e.target.closest('.msg-checkbox')) return;
-            openMessageLarge(row.dataset.id);
-        });
-    });
 
     renderBulkBar();
 }
@@ -649,14 +659,21 @@ async function loadMessages(reset = true) {
     if (S.readFilter !== '') params.set('is_read', S.readFilter);
     if (S.search) params.set('search', S.search);
 
-    document.getElementById('messages-container').innerHTML = '<div class="loading-state">Cargando...</div>';
+    const listPane = document.getElementById('list-pane');
+    const savedScroll = (!reset && listPane) ? listPane.scrollTop : 0;
+
+    if (reset) {
+        document.getElementById('messages-container').innerHTML = '<div class="loading-state">Cargando...</div>';
+    }
     const r = await api('GET', `/messages?${params}`);
     if (!r?.ok) { toast('Error al cargar mensajes', 'error'); return; }
     const msgs = Array.isArray(r.data) ? r.data : (r.data?.data || []);
+    const prevCount = S.messages.length;
     S.messages = reset ? msgs : [...S.messages, ...msgs];
     S.hasMore = msgs.length === 50;
     S.page++;
-    renderMessages();
+    renderMessages(reset ? 0 : prevCount);
+    if (!reset && listPane) listPane.scrollTop = savedScroll;
     loadUnreadCounts();
 }
 
