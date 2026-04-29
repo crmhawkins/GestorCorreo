@@ -147,6 +147,26 @@ class Pop3Service
     }
 
     /**
+     * Borra del servidor POP3 el mensaje con el UIDL dado.
+     * Hay que llamar a disconnect() después para que QUIT confirme el DELE.
+     */
+    public function deleteByUidl(string $uidl): bool
+    {
+        try {
+            $uidls  = $this->getAllUidls(); // [msgNum => uidl]
+            $msgNum = array_search($uidl, $uidls, true);
+            if ($msgNum === false) {
+                return false;
+            }
+            $resp = $this->sendCommand("DELE {$msgNum}");
+            return $this->isOk($resp);
+        } catch (\Throwable $e) {
+            Log::warning('Pop3Service: deleteByUidl failed', ['uidl' => $uidl, 'error' => $e->getMessage()]);
+            return false;
+        }
+    }
+
+    /**
      * Intenta recuperar el socket POP3 tras un error de lectura.
      * Envía RSET para limpiar el estado; si falla, reconecta desde cero.
      */
