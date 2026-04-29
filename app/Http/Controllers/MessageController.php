@@ -594,4 +594,58 @@ class MessageController extends Controller
 
         return response()->json(['deleted' => $deleted]);
     }
+
+    public function exportZip(Request $request): \Symfony\Component\HttpFoundation\StreamedResponse
+    {
+        $user       = $request->user();
+        $folder     = $request->query('folder', 'all');
+        $accountIds = Account::where('user_id', $user->id)
+            ->where('is_deleted', false)
+            ->pluck('id');
+
+        $query = Message::whereIn('account_id', $accountIds)
+            ->where('is_deleted', false);
+
+        if ($folder === 'SPAM') {
+            $query->where('classification_label', 'SPAM');
+        } elseif ($folder === 'deleted') {
+            $query->withoutGlobalScopes()->whereIn('account_id', $accountIds)->where('is_deleted', true);
+        } elseif ($folder !== 'all') {
+            $query->where('classification_label', $folder);
+        }
+
+        $messages = $query->orderBy('date', 'desc')->limit(500)->get();
+
+        $zipPath = tempnam(sys_get_temp_dir(), 'mail_export_');
+        $zip     = new \ZipArchive();
+        $zip->open($zipPath, \ZipArchive::OVERWRITE);
+
+        foreach ($messages as $msg) {
+            $date    = $msg->date ? \Carbon\Carbon::parse($msg->date)->format('Ymd_His') : 'nodate';
+            $subj    = preg_replace('/[^\w\-]/', '_', mb_substr($msg->subject ?? 'sin_asunto', 0, 40));
+            $fname   = "{$date}_{$subj}.txt";
+
+            $to = is_string($msg->to_addresses) ? $msg->to_addresses : json_encode($msg->to_addresses ?? []);
+            $content  = "De: {$msg->from_name} <{$msg->from_email}>\n";
+            $content .= "Para: {$to}\n";
+            $content .= "Asunto: {$msg->subject}\n";
+            $content .= "Fecha: {$msg->date}\n";
+            $content .= str_repeat('-', 60) . "\n\n";
+            $content .= $msg->body_text ?? strip_tags($msg->body_html ?? '');
+
+            $zip->addFromString($fname, $content);
+        }
+
+        $zip->close();
+        $zipContent = file_get_contents($zipPath);
+        unlink($zipPath);
+
+        $filename = "export_{$folder}_" . date('Ymd') . ".zip";
+
+        return response()->streamDownload(
+            fn () => print($zipContent),
+            $filename,
+            ['Content-Type' => 'application/zip']
+        );
+    }
 }
