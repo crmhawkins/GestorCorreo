@@ -74,6 +74,7 @@ class Pop3Service
     {
         if (is_resource($this->socket)) {
             @fwrite($this->socket, "QUIT\r\n");
+            @fgets($this->socket, 512); // wait for +OK — ensures server commits pending DELEs
             @fclose($this->socket);
         }
         $this->socket = null;
@@ -316,7 +317,7 @@ class Pop3Service
 
     private function extractBoundary(string $contentType): ?string
     {
-        if (preg_match('/boundary="?([^";]+)"?/i', $contentType, $m)) {
+        if (preg_match('/boundary="?([^";\/]+)"?/i', $contentType, $m)) {
             return $m[1];
         }
         return null;
@@ -327,7 +328,7 @@ class Pop3Service
         $text = '';
         $html = '';
         $attachments = [];
-        $segments = preg_split('/--' . preg_quote($boundary, '/') . '(?:--)?' . "\r?\n", $rawBody) ?: [];
+        $segments = preg_split('/--' . preg_quote($boundary, '/') . '(?:--)?\r?\n/', $rawBody) ?: [];
 
         foreach ($segments as $segment) {
             $segment = trim($segment);
@@ -380,10 +381,10 @@ class Pop3Service
 
     private function extractFilename(string $disposition, string $contentType): string
     {
-        if (preg_match('/filename\*?="?([^";]+)"?/i', $disposition, $m)) {
+        if (preg_match('/filename\*?="?([^";\/]+)"?/i', $disposition, $m)) {
             return $this->decodeHeader($m[1]);
         }
-        if (preg_match('/name="?([^";]+)"?/i', $contentType, $m)) {
+        if (preg_match('/name="?([^";\/]+)"?/i', $contentType, $m)) {
             return $this->decodeHeader($m[1]);
         }
         return '';

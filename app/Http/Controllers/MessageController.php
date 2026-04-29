@@ -624,6 +624,9 @@ class MessageController extends Controller
 
     public function deleteFolder(Request $request): JsonResponse
     {
+        ignore_user_abort(true);
+        set_time_limit(300);
+
         $user   = $request->user();
         $folder = $request->query('folder', 'SPAM');
 
@@ -647,35 +650,45 @@ class MessageController extends Controller
         foreach ($byAccount as $accountId => $accountMessages) {
             $account = Account::find($accountId);
             if (!$account) continue;
-            $port   = (int)$account->imap_port;
-            $host   = (string)$account->imap_host;
-            $isPop3 = str_starts_with($host, 'pop.') || str_contains($host, 'pop3') || in_array($port, [110, 995], true);
+            $protocol = strtolower((string)($account->protocol ?? ''));
+            $port     = (int)$account->imap_port;
+            $host     = (string)$account->imap_host;
+            $isPop3   = $protocol === 'pop3'
+                || str_starts_with($host, 'pop.')
+                || str_contains($host, 'pop3')
+                || in_array($port, [110, 995], true);
             if (!$isPop3) continue;
             $uidls = $accountMessages->pluck('imap_uid')->filter()->values()->toArray();
-            if (empty($uidls)) continue;
+            if (empty($uidls)) {
+                Log::info('deleteFolder: sin uidls para cuenta', ['account_id' => $accountId]);
+                continue;
+            }
             try {
                 $password = $this->encryption->decrypt($account->encrypted_password);
                 $pop3 = new Pop3Service($account, $password);
                 if ($pop3->connect()) {
-                    $pop3->deleteMultipleByUidls($uidls);
+                    $n = $pop3->deleteMultipleByUidls($uidls);
                     $pop3->disconnect();
+                    Log::info('deleteFolder: POP3 DELEd', ['account' => $account->email_address, 'count' => $n]);
+                } else {
+                    Log::warning('deleteFolder: POP3 connect failed', ['account' => $account->email_address]);
                 }
-            } catch (\Throwable) {}
+            } catch (\Throwable $e) {
+                Log::warning('deleteFolder: POP3 exception', ['account' => $account->email_address, 'error' => $e->getMessage()]);
+            }
         }
 
-        // Borrar de BD
-        $deleted = 0;
+        // Borrar ficheros adjuntos del disco
         foreach ($messages as $msg) {
             foreach ($msg->attachments as $att) {
                 if ($att->local_path) {
                     try { Storage::disk('public')->delete(str_replace('public/', '', $att->local_path)); } catch (\Throwable) {}
                 }
             }
-            $msg->attachments()->delete();
-            if ($msg->classification) $msg->classification()->delete();
-            $msg->delete();
-            $deleted++;
         }
+
+        // Bulk delete — CASCADE elimina attachments + classifications automáticamente
+        $deleted = Message::whereIn('id', $messages->pluck('id'))->delete();
 
         return response()->json(['deleted' => $deleted]);
     }
