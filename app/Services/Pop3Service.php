@@ -147,26 +147,6 @@ class Pop3Service
     }
 
     /**
-     * Borra del servidor POP3 el mensaje con el UIDL dado.
-     * Hay que llamar a disconnect() después para que QUIT confirme el DELE.
-     */
-    public function deleteByUidl(string $uidl): bool
-    {
-        try {
-            $uidls  = $this->getAllUidls(); // [msgNum => uidl]
-            $msgNum = array_search($uidl, $uidls, true);
-            if ($msgNum === false) {
-                return false;
-            }
-            $resp = $this->sendCommand("DELE {$msgNum}");
-            return $this->isOk($resp);
-        } catch (\Throwable $e) {
-            Log::warning('Pop3Service: deleteByUidl failed', ['uidl' => $uidl, 'error' => $e->getMessage()]);
-            return false;
-        }
-    }
-
-    /**
      * Intenta recuperar el socket POP3 tras un error de lectura.
      * Envía RSET para limpiar el estado; si falla, reconecta desde cero.
      */
@@ -347,7 +327,7 @@ class Pop3Service
         $text = '';
         $html = '';
         $attachments = [];
-        $segments = preg_split('/--' . preg_quote($boundary, '/') . '(?:--)?\r?\n/', $rawBody) ?: [];
+        $segments = preg_split('/--' . preg_quote($boundary, '/') . '(?:--)?' . "\r?\n", $rawBody) ?: [];
 
         foreach ($segments as $segment) {
             $segment = trim($segment);
@@ -456,7 +436,7 @@ class Pop3Service
 
         // Limpieza defensiva para delimitadores residuales genéricos.
         $clean = preg_replace('/^\s*--[A-Za-z0-9_=\-]{12,}(?:--)?\s*$/m', '', $clean) ?? $clean;
-        $clean = preg_replace("/(\r?\n){3,}/", "\n\n", $clean) ?? $clean;
+        $clean = preg_replace("/(\.r?\n){3,}/", "\n\n", $clean) ?? $clean;
 
         return trim($clean);
     }
@@ -512,6 +492,45 @@ class Pop3Service
             ];
         }
         return $res;
+    }
+
+    public function deleteMultipleByUidls(array $uidls): int
+    {
+        try {
+            $allUidls = $this->getAllUidls(); // [msgNum => uidl]
+            $flipped  = array_flip($allUidls); // [uidl => msgNum]
+            $deleted  = 0;
+            foreach ($uidls as $uidl) {
+                $msgNum = $flipped[$uidl] ?? null;
+                if ($msgNum === null) continue;
+                $resp = $this->sendCommand("DELE {$msgNum}");
+                if ($this->isOk($resp)) $deleted++;
+            }
+            return $deleted;
+        } catch (\Throwable $e) {
+            Log::warning('Pop3Service: deleteMultipleByUidls failed', ['error' => $e->getMessage()]);
+            return 0;
+        }
+    }
+
+    /**
+     * Borra del servidor POP3 el mensaje con el UIDL dado.
+     * Hay que llamar a disconnect() después para que QUIT confirme el DELE.
+     */
+    public function deleteByUidl(string $uidl): bool
+    {
+        try {
+            $uidls  = $this->getAllUidls(); // [msgNum => uidl]
+            $msgNum = array_search($uidl, $uidls, true);
+            if ($msgNum === false) {
+                return false;
+            }
+            $resp = $this->sendCommand("DELE {$msgNum}");
+            return $this->isOk($resp);
+        } catch (\Throwable $e) {
+            Log::warning('Pop3Service: deleteByUidl failed', ['uidl' => $uidl, 'error' => $e->getMessage()]);
+            return false;
+        }
     }
 
     public function getLastErrors(): array
