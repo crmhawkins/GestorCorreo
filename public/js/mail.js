@@ -183,8 +183,14 @@ function buildPreviewHtml(message) {
     const imageAtts = attachments.filter(a => String(a?.mime_type || '').toLowerCase().startsWith('image/'));
     const firstImg = imageAtts[0]?.id ? `/api/attachments/${imageAtts[0].id}/download` : null;
     html = html.replace(/src\s*=\s*(['"])cid:([^'"]+)\1/gi, (full, q, cid) => {
-        const c = String(cid).toLowerCase();
-        const match = imageAtts.find(a => { const n = String(a?.filename || '').toLowerCase(); return n && (c.includes(n) || n.includes(c)); });
+        const c        = String(cid).toLowerCase();
+        const cidLocal = c.split('@')[0];
+        const match = imageAtts.find(a => {
+            const n     = String(a?.filename || '').toLowerCase();
+            const nBase = n.replace(/\.[^.]+$/, '');
+            return n && (c.includes(n) || n.includes(c) ||
+                (nBase && (cidLocal.includes(nBase) || nBase.includes(cidLocal))));
+        });
         const url = match?.id ? `/api/attachments/${match.id}/download` : firstImg;
         return url ? `src=${q}${url}${q}` : full;
     });
@@ -562,9 +568,13 @@ async function renderViewer(msg) {
     const m = r.data;
     S.activeMessage = m;
 
-    const attachments = (m.attachments || []).map(a =>
-        `<a class="attachment-chip" href="/api/attachments/${a.id}/download" target="_blank" rel="noopener" onclick="dlAttachment(event,${a.id})">&#128206; ${escHtml(a.filename)}</a>`
-    ).join('');
+    if (!window._attReg) window._attReg = {};
+    (m.attachments || []).forEach(a => { window._attReg[a.id] = a; });
+    const attachments = (m.attachments || []).map(a => {
+        const mime = a.mime_type || '';
+        const icon = mime.startsWith('image/') ? '&#128444;' : mime === 'application/pdf' ? '&#128196;' : '&#128206;';
+        return `<a class="attachment-chip" href="#" onclick="previewAttachment(event,${a.id})">${icon} ${escHtml(a.filename)}</a>`;
+    }).join('');
 
     const previewHtml = await resolveInlineImages(buildPreviewHtml(m), m.attachments || []);
     const normalizedText = normalizeBodyTextForReply(m.body_text, m.body_html);
@@ -855,6 +865,79 @@ window.dlAttachment = async function(e, id) {
     const fname = (cd.match(/filename="?([^"]+)"?/) || [])[1] || `adjunto_${id}`;
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a'); a.href = url; a.download = fname; a.click(); URL.revokeObjectURL(url);
+};
+
+window.previewAttachment = async function(e, id) {
+    e.preventDefault();
+    const att   = window._attReg?.[id];
+    if (!att) return;
+    const modal = document.getElementById('modal-att-preview');
+    const body  = document.getElementById('att-preview-body');
+    const fname = document.getElementById('att-preview-filename');
+    const fmeta = document.getElementById('att-preview-meta');
+    const dlBtn = document.getElementById('btn-att-download');
+
+    fname.textContent = att.filename || `adjunto_${id}`;
+    const sizeKb = att.size_bytes ? (att.size_bytes / 1024).toFixed(0) + ' KB' : '';
+    fmeta.textContent = [att.mime_type, sizeKb].filter(Boolean).join(' · ');
+    dlBtn.onclick = () => dlAttachment({ preventDefault() {} }, id);
+    body.innerHTML = '<div style="color:var(--text-dim);font-size:.85rem;text-align:center;padding:3rem">Cargando...</div>';
+    modal.style.display = 'flex';
+
+    const mime = att.mime_type || '';
+    const url  = `/api/attachments/${id}/download`;
+
+    if (mime.startsWith('image/')) {
+        try {
+            const r = await fetch(url, { headers: { Authorization: `Bearer ${S.token}` } });
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            const blob    = await r.blob();
+            const dataUrl = await new Promise(res => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.readAsDataURL(blob); });
+            body.innerHTML = `<img src="${dataUrl}" style="max-width:100%;max-height:80vh;object-fit:contain;border-radius:4px;display:block;margin:auto">`;
+        } catch (ex) {
+            body.innerHTML = `<div style="color:var(--danger);text-align:center;padding:3rem">Error al cargar imagen: ${escHtml(ex.message)}</div>`;
+        }
+    } else if (mime === 'application/pdf') {
+        try {
+            const r = await fetch(url, { headers: { Authorization: `Bearer ${S.token}` } });
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            const blob    = await r.blob();
+            const blobUrl = URL.createObjectURL(blob);
+            body.innerHTML = `<iframe src="${blobUrl}" style="width:100%;height:78vh;border:none;border-radius:4px"></iframe>`;
+        } catch (ex) {
+            body.innerHTML = `<div style="color:var(--danger);text-align:center;padding:3rem">Error al cargar PDF: ${escHtml(ex.message)}</div>`;
+        }
+    } else {
+        body.innerHTML = `
+            <div style="text-align:center;padding:3rem">
+                <div style="font-size:3.5rem;margin-bottom:1rem">&#128206;</div>
+                <div style="font-weight:600;font-size:.95rem;margin-bottom:.4rem">${escHtml(att.filename || `adjunto_${id}`)}</div>
+                <div style="font-size:.78rem;color:var(--text-dim);margin-bottom:1.5rem">${escHtml(att.mime_type || 'archivo')}${sizeKb ? ' · ' + sizeKb : ''}</div>
+                <button class="btn-primary" onclick="dlAttachment({preventDefault(){}},${id})">&#11015; Descargar</button>
+            </div>`;
+    }
+};
+
+window.downloadFolder = async function(folder) {
+    const btn = document.getElementById('btn-folder-dl-spam');
+    if (btn) { btn.disabled = true; btn.textContent = '...'; }
+    try {
+        const r = await fetch(`/api/messages/export-zip?folder=${encodeURIComponent(folder)}`, {
+            headers: { Authorization: `Bearer ${S.token}` }
+        });
+        if (!r.ok) { toast('Error al exportar carpeta', 'error'); return; }
+        const blob = await r.blob();
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        a.href = url;
+        a.download = `${folder}_${new Date().toISOString().slice(0, 10)}.zip`;
+        a.click();
+        URL.revokeObjectURL(url);
+    } catch (ex) {
+        toast('Error: ' + ex.message, 'error');
+    } finally {
+        if (btn) { btn.disabled = false; btn.textContent = '&#11015;'; }
+    }
 };
 
 /* ── Sync ───────────────────────────────────────────────────────── */
@@ -1152,9 +1235,13 @@ window.openMessageLarge = async function(id) {
     const r = await api('GET', `/messages/${id}`);
     if (!r?.ok) { toast('No se pudo abrir', 'error'); return; }
     const m = r.data; S.activeMessage = m;
-    const attachments = (m.attachments || []).map(a =>
-        `<a class="attachment-chip" href="/api/attachments/${a.id}/download" target="_blank" rel="noopener" onclick="dlAttachment(event,${a.id})">&#128206; ${escHtml(a.filename)}</a>`
-    ).join('');
+    if (!window._attReg) window._attReg = {};
+    (m.attachments || []).forEach(a => { window._attReg[a.id] = a; });
+    const attachments = (m.attachments || []).map(a => {
+        const mime = a.mime_type || '';
+        const icon = mime.startsWith('image/') ? '&#128444;' : mime === 'application/pdf' ? '&#128196;' : '&#128206;';
+        return `<a class="attachment-chip" href="#" onclick="previewAttachment(event,${a.id})">${icon} ${escHtml(a.filename)}</a>`;
+    }).join('');
     const previewHtml = await resolveInlineImages(buildPreviewHtml(m), m.attachments || []);
     const normalizedText = normalizeBodyTextForReply(m.body_text, m.body_html);
     const body = previewHtml
@@ -1905,6 +1992,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // Esc clears selection / closes viewer / exits zen mode
         if (e.key === 'Escape') {
+            const attModal = document.getElementById('modal-att-preview');
+            if (attModal && attModal.style.display !== 'none') {
+                attModal.style.display = 'none';
+                document.getElementById('att-preview-body').innerHTML = '';
+                return;
+            }
             if (S.zenMode) { window.toggleZenMode(); return; }
             if (S.selectedIds.size > 0) clearSelection();
             else if (S.activeMessage) closeViewer();
@@ -1930,6 +2023,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (btnSaveRetention) btnSaveRetention.addEventListener('click', saveRetentionSettings);
     const btnCloseRetention = document.getElementById('btn-close-retention');
     if (btnCloseRetention) btnCloseRetention.addEventListener('click', () => { document.getElementById('modal-retention').style.display = 'none'; });
+
+    // Attachment preview modal
+    const btnCloseAttPreview = document.getElementById('btn-close-att-preview');
+    if (btnCloseAttPreview) btnCloseAttPreview.addEventListener('click', () => {
+        document.getElementById('modal-att-preview').style.display = 'none';
+        document.getElementById('att-preview-body').innerHTML = '';
+    });
 
     // Full sync button
     const btnFullSync = document.getElementById('btn-full-sync');
