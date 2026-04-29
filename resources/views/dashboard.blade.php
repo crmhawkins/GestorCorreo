@@ -137,6 +137,7 @@
                         <option value="1">Leidos</option>
                     </select>
                     <button class="btn-toolbar" id="btn-clear-filters" type="button">Limpiar</button>
+                    <button class="btn-toolbar danger" id="btn-delete-folder-all" type="button" style="display:none">&#128465; Borrar todo</button>
                 </div>
             </div>
             <div class="toolbar-actions">
@@ -404,7 +405,7 @@
 @endpush
 
 <style>
-.list-select-bar { position: sticky; top: 0; z-index: 12; }
-.bulk-bar        { position: sticky; top: 36px; z-index: 11; }
+.list-select-bar { position: sticky; top: 0; z-index: 12; background: var(--surface); border-bottom: 1px solid var(--border); }
+.bulk-bar        { position: sticky; top: 37px; z-index: 11; background: var(--surface); border-bottom: 1px solid var(--border); }
 </style>
 @endsection
