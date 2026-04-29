@@ -67,6 +67,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::patch('/messages/mark-all-read',       [App\Http\Controllers\MessageController::class, 'markAllRead']);
     Route::delete('/messages/purge-old',          [App\Http\Controllers\MessageController::class, 'purgeOld']);
     Route::get('/messages/export-zip',            [App\Http\Controllers\MessageController::class, 'exportZip']);
+    Route::delete('/messages/delete-folder',      [App\Http\Controllers\MessageController::class, 'deleteFolder']);
     Route::post('/messages/bulk/delete',          [App\Http\Controllers\MessageController::class, 'bulkDelete']);
     Route::post('/messages/bulk/classify',        [App\Http\Controllers\MessageController::class, 'bulkClassify']);
     Route::post('/messages/bulk/flags',           [App\Http\Controllers\MessageController::class, 'bulkFlags']);
