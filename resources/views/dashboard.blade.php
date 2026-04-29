@@ -99,7 +99,10 @@
                 <div class="folder-item" data-filter="Interesantes">Interesantes <span class="total-count" id="count-Interesantes"></span></div>
                 <div class="folder-item" data-filter="Servicios">Servicios <span class="total-count" id="count-Servicios"></span></div>
                 <div class="folder-item" data-filter="EnCopia">En copia <span class="total-count" id="count-EnCopia"></span></div>
-                <div class="folder-item" data-filter="SPAM">SPAM <span class="total-count" id="count-SPAM"></span></div>
+                <div class="folder-item" data-filter="SPAM" style="display:flex;align-items:center;justify-content:space-between">
+                    <span>SPAM <span class="total-count" id="count-SPAM"></span></span>
+                    <button id="btn-folder-dl-spam" onclick="event.stopPropagation();downloadFolder('SPAM')" title="Descargar todo el SPAM" style="background:none;border:none;cursor:pointer;color:var(--text-dim);font-size:.82rem;padding:0 .25rem;line-height:1;flex-shrink:0" tabindex="-1">&#11015;</button>
+                </div>
                 <div class="folder-item" data-filter="deleted">Eliminados <span class="total-count" id="count-deleted"></span></div>
             </div>
         </div>
@@ -375,6 +378,21 @@
             <button class="btn-secondary" id="btn-close-retention">Cancelar</button>
             <button class="btn-primary" id="btn-save-retention">Guardar</button>
         </div>
+    </div>
+</div>
+
+<!-- MODAL: Attachment Preview -->
+<div class="modal-overlay" id="modal-att-preview" style="display:none">
+    <div class="modal-box" style="max-width:920px;width:95vw;max-height:92vh;display:flex;flex-direction:column;padding:0;overflow:hidden">
+        <div class="modal-header" style="padding:.75rem 1rem;gap:.75rem;align-items:flex-start">
+            <div style="flex:1;min-width:0">
+                <div id="att-preview-filename" style="font-weight:600;font-size:.9rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-bright)"></div>
+                <div id="att-preview-meta" style="font-size:.72rem;color:var(--text-dim);margin-top:.1rem"></div>
+            </div>
+            <button id="btn-att-download" class="btn-primary" style="white-space:nowrap;flex-shrink:0">&#11015; Descargar</button>
+            <button class="btn-icon" id="btn-close-att-preview" style="flex-shrink:0">&#10005;</button>
+        </div>
+        <div id="att-preview-body" style="flex:1;overflow:auto;display:flex;align-items:center;justify-content:center;background:var(--bg);min-height:300px;padding:1rem"></div>
     </div>
 </div>
 
