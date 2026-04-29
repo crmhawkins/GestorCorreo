@@ -402,4 +402,9 @@
 @push('scripts')
 <script src="/js/mail.js"></script>
 @endpush
+
+<style>
+.list-select-bar { position: sticky; top: 0; z-index: 12; }
+.bulk-bar        { position: sticky; top: 36px; z-index: 11; }
+</style>
 @endsection
