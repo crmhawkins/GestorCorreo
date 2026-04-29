@@ -7,15 +7,17 @@ use App\Models\AiConfig;
 use Illuminate\Support\Facades\Log;
 
 /**
- * AiService — compatible con la API personalizada en https://192.168.1.45/chat
+ * AiService — compatible con API personalizada Hawkins y Ollama nativo.
  *
- * Formato de la API:
- *   POST {api_url}/chat   body: {"prompt":"...","model":"..."}
+ * Hawkins custom API:
+ *   POST {api_url}  body: {"prompt":"...","model":"...","modelo":"..."}
  *   Header: x-api-key: {api_key}
- *   Respuesta: texto plano o {"response":"..."} o {"choices":[...]}
+ *   Respuesta: {"respuesta":"..."} | {"response":"..."} | {"choices":[...]} | texto plano
  *
- *   GET {api_url}/text/models
- *   Respuesta: array de nombres de modelos o {"models":[...]}
+ * Ollama (detectado por :11434 en URL o /api/generate|/api/chat en path):
+ *   POST {api_url}/api/generate  body: {"model":"...","prompt":"...","stream":false}
+ *   Sin headers de autenticación
+ *   Respuesta: {"response":"...","done":true}
  */
 class AiService
 {
@@ -187,7 +189,7 @@ PROMPT;
 
     public function checkStatus(): array
     {
-        if (!$this->config || !$this->config->api_url || !$this->config->api_key) {
+        if (!$this->config || !$this->config->api_url) {
             return ['available' => false, 'reason' => 'Sin configuración IA'];
         }
 
@@ -240,39 +242,34 @@ PROMPT;
     }
 
     /**
-     * Llamada HTTP cruda a la API personalizada.
+     * Llamada HTTP cruda. Soporta API personalizada Hawkins y Ollama nativo.
      * Devuelve el texto de respuesta o null si falla.
-     *
-     * Considera "fallo" (y devuelve null):
-     *  - HTTP != 2xx
-     *  - Timeout / excepción de red
-     *  - HTTP 402/429 (pagos/rate limit)
-     *  - Body con "success": false o campos típicos de cuota/tokens agotados
-     *  - Respuesta vacía o parseo fallido
      */
     private function callModelRaw(string $modelName, string $prompt, int $timeout = 60): ?string
     {
         if (!$this->config) return null;
 
-        $endpoint = $this->resolveChatEndpoint((string)$this->config->api_url);
+        $baseUrl   = (string) $this->config->api_url;
+        $isOllama  = $this->isOllamaEndpoint($baseUrl);
+        $endpoint  = $this->resolveChatEndpoint($baseUrl, $isOllama);
 
         try {
-            $response = Http::withHeaders(['x-api-key' => $this->config->api_key])
-                ->withoutVerifying()
-                ->timeout($timeout)
-                ->post($endpoint, [
-                    'prompt' => $prompt,
-                    // Compatibilidad con APIs que esperan "modelo" o "model"
-                    'modelo' => $modelName,
-                    'model'  => $modelName,
-                ]);
+            $httpClient = Http::withoutVerifying()->timeout($timeout);
+
+            if (!$isOllama && !empty($this->config->api_key)) {
+                $httpClient = $httpClient->withHeaders(['x-api-key' => $this->config->api_key]);
+            }
+
+            $payload = $isOllama
+                ? ['model' => $modelName, 'prompt' => $prompt, 'stream' => false]
+                : ['prompt' => $prompt, 'modelo' => $modelName, 'model' => $modelName];
+
+            $response = $httpClient->post($endpoint, $payload);
         } catch (\Throwable $e) {
-            // Timeout, DNS, conexión, etc. → fallback
             Log::warning("AiService: excepción HTTP con modelo {$modelName}: {$e->getMessage()}");
             return null;
         }
 
-        // HTTP 402/429/5xx/etc → fallback
         if ($response->failed()) {
             Log::warning("AiService: HTTP {$response->status()} desde {$endpoint}", [
                 'model' => $modelName,
@@ -281,10 +278,6 @@ PROMPT;
             return null;
         }
 
-        // Detectar errores "blandos" dentro de HTTP 200:
-        //   {"success": false, ...}
-        //   {"error": "..."}
-        //   body con "quota", "token", "rate limit", "insufficient_quota", etc.
         $data = $response->json();
         if (is_array($data)) {
             if (isset($data['success']) && $data['success'] === false) {
@@ -301,7 +294,6 @@ PROMPT;
             }
         }
 
-        // Heurística final sobre el texto bruto
         $bodyLower = strtolower(mb_substr($response->body(), 0, 2000));
         $quotaHints = ['insufficient_quota', 'out of tokens', 'tokens agotados', 'rate limit', 'quota exceeded', 'sin créditos', 'sin creditos', 'no tokens'];
         foreach ($quotaHints as $hint) {
@@ -312,17 +304,42 @@ PROMPT;
         }
 
         $text = $this->extractTextFromResponse($response);
-        // Respuesta vacía también cuenta como fallo
         if ($text === null || trim($text) === '') {
             return null;
         }
         return $text;
     }
 
-    private function resolveChatEndpoint(string $apiUrl): string
+    /**
+     * Detecta si la URL apunta a un servidor Ollama nativo.
+     * Criterio: contiene :11434 en el host o /api/generate|/api/chat en el path.
+     */
+    private function isOllamaEndpoint(string $url): bool
+    {
+        return str_contains($url, ':11434')
+            || str_contains($url, '/api/generate')
+            || str_contains($url, '/api/chat');
+    }
+
+    /**
+     * Resuelve la URL final del endpoint de chat.
+     */
+    private function resolveChatEndpoint(string $apiUrl, bool $isOllama): string
     {
         $url = rtrim($apiUrl, '/');
 
+        if ($isOllama) {
+            // Si ya tiene ruta específica, usarla tal cual
+            if (str_ends_with($url, '/api/generate') || str_ends_with($url, '/api/chat')) {
+                return $url;
+            }
+            // Añadir /api/generate al base URL
+            $parsed = parse_url($url);
+            $base   = ($parsed['scheme'] ?? 'http') . '://' . ($parsed['host'] ?? '') . ':' . ($parsed['port'] ?? 11434);
+            return $base . '/api/generate';
+        }
+
+        // Lógica para API personalizada Hawkins
         if (str_ends_with($url, '/chat/chat')) {
             return $url;
         }
@@ -340,21 +357,18 @@ PROMPT;
 
     /**
      * Extrae el texto de la respuesta, manejando múltiples formatos posibles.
-     * Soporta la API personalizada hawkins.es: {"respuesta":"...","success":true}
      */
     private function extractTextFromResponse($response): ?string
     {
         $body = $response->body();
-
-        // Intentar parsear JSON
         $data = $response->json();
 
         if (is_array($data)) {
+            // Formato Ollama /api/generate: {"response":"...","done":true}
+            if (isset($data['response']) && is_string($data['response'])) return $data['response'];
+
             // Formato hawkins.es: {"respuesta": "...", "success": true}
             if (isset($data['respuesta'])) return (string) $data['respuesta'];
-
-            // Formato: {"response": "..."}
-            if (isset($data['response'])) return (string) $data['response'];
 
             // Formato OpenAI: {"choices":[{"message":{"content":"..."}}]}
             if (isset($data['choices'][0]['message']['content'])) {
@@ -367,20 +381,20 @@ PROMPT;
             // Formato: {"content": "..."}
             if (isset($data['content'])) return (string) $data['content'];
 
-            // Formato: {"message": "..."}
+            // Formato: {"message": "..."} (string)
             if (isset($data['message']) && is_string($data['message'])) {
                 return (string) $data['message'];
             }
 
-            // Si es un array plano con texto
+            // Array plano de un solo campo string
             if (count($data) === 1) {
                 $val = reset($data);
                 if (is_string($val)) return $val;
             }
         }
 
-        // Si el body es texto plano directamente
-        if (is_string($body) && strlen($body) > 0) {
+        // Body texto plano directamente
+        if (is_string($body) && strlen(trim($body)) > 0) {
             return trim($body);
         }
 
