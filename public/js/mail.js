@@ -288,6 +288,8 @@ function renderFolders() {
     });
     const trashBtn = document.getElementById('btn-empty-trash');
     if (trashBtn) trashBtn.style.display = S.filter === 'deleted' ? '' : 'none';
+    const delFolderBtn = document.getElementById('btn-delete-folder-all');
+    if (delFolderBtn) delFolderBtn.style.display = ['SPAM','deleted','Interesantes','Servicios','EnCopia'].includes(S.filter) ? '' : 'none';
     bindFolderEvents();
 }
 
@@ -1935,6 +1937,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         const r = await api('DELETE', `/messages/trash${p}`);
         if (r?.ok) { toast('Papelera vaciada', 'success'); loadMessages(true); }
         else toast('Error', 'error');
+    });
+
+    document.getElementById('btn-delete-folder-all').addEventListener('click', async () => {
+        const label = S.filter === 'deleted' ? 'la papelera' : `la carpeta "${S.filter}"`;
+        if (!confirm(`Borrar TODOS los mensajes de ${label}? Esta acción no se puede deshacer.`)) return;
+        const r = await api('DELETE', `/messages/delete-folder?folder=${encodeURIComponent(S.filter)}`);
+        if (r?.ok) { toast(`${r.data?.deleted ?? ''} mensajes eliminados`, 'success'); loadMessages(true); }
+        else toast('Error al eliminar', 'error');
     });
 
     // Infinite scroll
