@@ -624,6 +624,66 @@ class MessageController extends Controller
         return response()->json(['deleted' => $deleted]);
     }
 
+    public function deleteFolder(Request $request): JsonResponse
+    {
+        $user   = $request->user();
+        $folder = $request->query('folder', 'SPAM');
+
+        $accountIds = Account::where('user_id', $user->id)
+            ->where('is_deleted', false)
+            ->pluck('id');
+
+        $query = Message::with('attachments', 'classification')
+            ->whereIn('account_id', $accountIds);
+
+        if ($folder === 'SPAM') {
+            $query->where('classification_label', 'SPAM');
+        } elseif ($folder === 'deleted') {
+            $query->where('is_deleted', true);
+        } else {
+            $query->where('classification_label', $folder);
+        }
+
+        $messages = $query->get();
+
+        // Batch POP3 deletion — una sesión por cuenta
+        $byAccount = $messages->groupBy('account_id');
+        foreach ($byAccount as $accountId => $accountMessages) {
+            $account = Account::find($accountId);
+            if (!$account) continue;
+            $port   = (int)$account->imap_port;
+            $host   = (string)$account->imap_host;
+            $isPop3 = str_starts_with($host, 'pop.') || str_contains($host, 'pop3') || in_array($port, [110, 995], true);
+            if (!$isPop3) continue;
+            $uidls = $accountMessages->pluck('imap_uid')->filter()->values()->toArray();
+            if (empty($uidls)) continue;
+            try {
+                $password = $this->encryption->decrypt($account->encrypted_password);
+                $pop3 = new Pop3Service($account, $password);
+                if ($pop3->connect()) {
+                    $pop3->deleteMultipleByUidls($uidls);
+                    $pop3->disconnect();
+                }
+            } catch (\Throwable) {}
+        }
+
+        // Borrar de BD
+        $deleted = 0;
+        foreach ($messages as $msg) {
+            foreach ($msg->attachments as $att) {
+                if ($att->local_path) {
+                    try { Storage::disk('public')->delete(str_replace('public/', '', $att->local_path)); } catch (\Throwable) {}
+                }
+            }
+            $msg->attachments()->delete();
+            if ($msg->classification) $msg->classification()->delete();
+            $msg->delete();
+            $deleted++;
+        }
+
+        return response()->json(['deleted' => $deleted]);
+    }
+
     public function exportZip(Request $request): \Symfony\Component\HttpFoundation\StreamedResponse
     {
         $user       = $request->user();
