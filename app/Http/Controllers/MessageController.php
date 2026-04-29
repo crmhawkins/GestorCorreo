@@ -6,12 +6,39 @@ use App\Models\Account;
 use App\Models\Message;
 use App\Models\Attachment;
 use App\Models\Classification;
+use App\Services\EncryptionService;
+use App\Services\Pop3Service;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Storage;
 
 class MessageController extends Controller
 {
+    public function __construct(private EncryptionService $encryption) {}
+
+    private function deleteFromServer(Message $message): void
+    {
+        try {
+            $account = $message->account;
+            if (!$account || empty($message->imap_uid)) return;
+            $port = (int)$account->imap_port;
+            $host = (string)$account->imap_host;
+            $isPop3 = str_starts_with($host, 'pop.') || str_contains($host, 'pop3') || in_array($port, [110, 995], true);
+            if (!$isPop3) return;
+            $password = $this->encryption->decrypt($account->encrypted_password);
+            $pop3 = new Pop3Service($account, $password);
+            if ($pop3->connect()) {
+                $pop3->deleteByUidl($message->imap_uid);
+                $pop3->disconnect();
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('MessageController: deleteFromServer failed', [
+                'message_id' => $message->id,
+                'error'      => $e->getMessage(),
+            ]);
+        }
+    }
+
     public function unreadCounts(Request $request): JsonResponse
     {
         $user = $request->user();
@@ -240,6 +267,7 @@ class MessageController extends Controller
             $message->classification()->delete();
         }
 
+        $this->deleteFromServer($message);
         $message->delete();
 
         return response()->json(['message' => 'Mensaje eliminado correctamente.']);
@@ -344,6 +372,7 @@ class MessageController extends Controller
             if ($message->classification) {
                 $message->classification()->delete();
             }
+            $this->deleteFromServer($message);
             $message->delete();
             $deleted++;
         }
