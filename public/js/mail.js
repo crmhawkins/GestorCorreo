@@ -1,8 +1,8 @@
 /**
- * Hawkins Mail v.21 – Vanilla JS frontend
+ * Hawkins Mail v.22 – Vanilla JS frontend
  * Calls the existing Laravel API at /api/*
  */
-console.log('%c Hawkins Mail v.21', 'color:#3b82f6;font-size:14px;font-weight:bold');
+console.log('%c Hawkins Mail v.22', 'color:#3b82f6;font-size:14px;font-weight:bold');
 
 /* ── State ──────────────────────────────────────────────────────── */
 const S = {
@@ -1448,35 +1448,35 @@ async function applyRetentionPolicies() {
 const AI_CAT_DEFS = [
     {
         key: 'Interesantes', name: 'Interesantes', emoji: '⭐',
-        defaultPrompt: 'Emails importantes que requieren atención: respuestas personales, trabajo, negocios, conversaciones directas con personas reales.',
+        defaultPrompt: 'Correos importantes que requieren atención y respuesta: conversaciones directas con personas reales (clientes, socios, contactos externos), negociaciones comerciales, emails de Gmail u otros proveedores personales. EXCLUYE correos de dominio propio (esos van a Internos). NO incluye notificaciones automáticas ni newsletters.',
     },
     {
         key: 'Servicios', name: 'Servicios', emoji: '🔔',
-        defaultPrompt: 'Notificaciones automáticas de servicios: confirmaciones de pedidos, alertas de sistemas, facturas, newsletters, bancos, redes sociales.',
+        defaultPrompt: 'Notificaciones automáticas de plataformas y servicios: redes sociales (Instagram, LinkedIn), reservas (Booking.com), herramientas tech (Adobe, Anthropic, GitHub), e-commerce (Amazon), administración pública, newsletters automáticas. NO incluye conversaciones directas con personas.',
     },
     {
         key: 'EnCopia', name: 'En copia', emoji: '📋',
-        defaultPrompt: 'Mensajes en los que el usuario está en copia (CC), listas de distribución o comunicaciones masivas a grupos grandes.',
+        defaultPrompt: 'Mensajes donde el usuario aparece en copia (CC), listas de distribución, boletines de asociaciones sectoriales, comunicaciones de organismos oficiales donde el usuario es destinatario secundario, emails masivos a grupos.',
     },
     {
         key: 'Internos', name: 'Internos', emoji: '🏢',
-        defaultPrompt: 'Correos internos de las propias empresas del usuario: comunicaciones entre empleados o departamentos, avisos internos, notificaciones de sistemas propios, alertas de CI/CD o GitHub de proyectos propios, informes generados internamente. El remitente tiene un dominio de la propia empresa.',
+        defaultPrompt: 'PRIORIDAD MÁXIMA: si el remitente usa un dominio propio de la empresa clasifica siempre como Internos. Correos internos entre empleados o departamentos, notificaciones de CI/CD y GitHub de proyectos propios, avisos de CRM o sistemas internos, notificaciones de WordPress de sitios propios.',
     },
     {
         key: 'Proveedores', name: 'Proveedores', emoji: '📦',
-        defaultPrompt: 'Correos de proveedores que venden productos o servicios al usuario: presupuestos recibidos de proveedores, facturas de compra, confirmaciones de pedido como comprador, comunicaciones de empresas que suministran materiales, software, servicios o cualquier bien.',
+        defaultPrompt: 'Correos de empresas que venden productos o servicios al usuario: facturas de compra, presupuestos recibidos de proveedores, confirmaciones de pedido como comprador, comunicaciones de empresas que suministran hosting, seguridad, seguros, consultoría, materiales, impresión o marketing.',
     },
     {
         key: 'Banca', name: 'Banca', emoji: '🏦',
-        defaultPrompt: 'Correos de entidades bancarias y financieras: extractos de cuenta, alertas de movimientos, confirmaciones de transferencias, notificaciones del banco, tarjetas de crédito, préstamos, seguros e inversiones.',
+        defaultPrompt: 'Correos de entidades bancarias y financieras: extractos de cuenta, alertas de movimientos o cargos, confirmaciones de transferencias, notificaciones de tarjetas, préstamos, avales e inversiones. Incluye Bankinter, Wise y cualquier otro banco o fintech.',
     },
     {
         key: 'PeticionesPresupuesto', name: 'Peticiones de presupuesto', emoji: '💬',
-        defaultPrompt: 'Solicitudes de presupuesto, precio, cotización o propuesta recibidas de clientes o potenciales clientes que piden información sobre un producto o servicio. Incluye consultas de precio, solicitudes de oferta y pedidos de propuesta comercial.',
+        defaultPrompt: 'Solicitudes de presupuesto, oferta, cotización o propuesta recibidas de clientes o potenciales clientes. Asuntos típicos: "presupuesto", "solicitud de oferta", "propuesta", "cotización", "solicitud de precio". NO incluye presupuestos que el usuario envía a otros.',
     },
     {
         key: 'SPAM', name: 'SPAM', emoji: '🗑️',
-        defaultPrompt: 'Correos no deseados, publicidad masiva, phishing, scams, ofertas irrelevantes o mensajes claramente no solicitados.',
+        defaultPrompt: 'Correos no deseados, publicidad masiva no solicitada, phishing, scams, sorteos o premios falsos, newsletters de empresas desconocidas, mailings masivos de marketing genérico, ofertas irrelevantes de empresas sin relación con el negocio.',
     },
 ];
 
