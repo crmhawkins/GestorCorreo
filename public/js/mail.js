@@ -1,8 +1,8 @@
 /**
- * Hawkins Mail v.20 – Vanilla JS frontend
+ * Hawkins Mail v.21 – Vanilla JS frontend
  * Calls the existing Laravel API at /api/*
  */
-console.log('%c Hawkins Mail v.20', 'color:#3b82f6;font-size:14px;font-weight:bold');
+console.log('%c Hawkins Mail v.21', 'color:#3b82f6;font-size:14px;font-weight:bold');
 
 /* ── State ──────────────────────────────────────────────────────── */
 const S = {
@@ -1457,6 +1457,22 @@ const AI_CAT_DEFS = [
     {
         key: 'EnCopia', name: 'En copia', emoji: '📋',
         defaultPrompt: 'Mensajes en los que el usuario está en copia (CC), listas de distribución o comunicaciones masivas a grupos grandes.',
+    },
+    {
+        key: 'Internos', name: 'Internos', emoji: '🏢',
+        defaultPrompt: 'Correos internos de las propias empresas del usuario: comunicaciones entre empleados o departamentos, avisos internos, notificaciones de sistemas propios, alertas de CI/CD o GitHub de proyectos propios, informes generados internamente. El remitente tiene un dominio de la propia empresa.',
+    },
+    {
+        key: 'Proveedores', name: 'Proveedores', emoji: '📦',
+        defaultPrompt: 'Correos de proveedores que venden productos o servicios al usuario: presupuestos recibidos de proveedores, facturas de compra, confirmaciones de pedido como comprador, comunicaciones de empresas que suministran materiales, software, servicios o cualquier bien.',
+    },
+    {
+        key: 'Banca', name: 'Banca', emoji: '🏦',
+        defaultPrompt: 'Correos de entidades bancarias y financieras: extractos de cuenta, alertas de movimientos, confirmaciones de transferencias, notificaciones del banco, tarjetas de crédito, préstamos, seguros e inversiones.',
+    },
+    {
+        key: 'PeticionesPresupuesto', name: 'Peticiones de presupuesto', emoji: '💬',
+        defaultPrompt: 'Solicitudes de presupuesto, precio, cotización o propuesta recibidas de clientes o potenciales clientes que piden información sobre un producto o servicio. Incluye consultas de precio, solicitudes de oferta y pedidos de propuesta comercial.',
     },
     {
         key: 'SPAM', name: 'SPAM', emoji: '🗑️',

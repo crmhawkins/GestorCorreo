@@ -103,6 +103,10 @@
                 <div class="folder-item" data-filter="Interesantes">Interesantes <span class="total-count" id="count-Interesantes"></span></div>
                 <div class="folder-item" data-filter="Servicios">Servicios <span class="total-count" id="count-Servicios"></span></div>
                 <div class="folder-item" data-filter="EnCopia">En copia <span class="total-count" id="count-EnCopia"></span></div>
+                <div class="folder-item" data-filter="Internos">Internos <span class="total-count" id="count-Internos"></span></div>
+                <div class="folder-item" data-filter="Proveedores">Proveedores <span class="total-count" id="count-Proveedores"></span></div>
+                <div class="folder-item" data-filter="Banca">Banca <span class="total-count" id="count-Banca"></span></div>
+                <div class="folder-item" data-filter="PeticionesPresupuesto">Peticiones de presupuesto <span class="total-count" id="count-PeticionesPresupuesto"></span></div>
                 <div class="folder-item" data-filter="SPAM" style="display:flex;align-items:center;justify-content:space-between">
                     <span>SPAM <span class="total-count" id="count-SPAM"></span></span>
                     <button id="btn-folder-dl-spam" onclick="event.stopPropagation();downloadFolder('SPAM')" title="Descargar todo el SPAM" style="background:none;border:none;cursor:pointer;color:var(--text-dim);font-size:.82rem;padding:0 .25rem;line-height:1;flex-shrink:0" tabindex="-1">&#11015;</button>
@@ -443,7 +447,7 @@
 <div id="toast-container" class="toast-container"></div>
 
 @push('scripts')
-<script src="/js/mail.js?v=20"></script>
+<script src="/js/mail.js?v=21"></script>
 @endpush
 
 <style>
