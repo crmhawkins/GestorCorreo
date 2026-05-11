@@ -268,7 +268,7 @@ function renderAccounts() {
 function renderFolders() {
     const host = document.getElementById('folders-list');
     host.querySelectorAll('.folder-item[data-custom="1"]').forEach(n => n.remove());
-    const builtins = new Set(['Interesantes', 'Servicios', 'EnCopia', 'SPAM']);
+    const builtins = new Set(['Interesantes', 'Servicios', 'EnCopia', 'SPAM', 'Internos', 'Proveedores', 'Banca', 'PeticionesPresupuesto']);
     const customCats = (S.categories || []).filter(c => c?.key && !builtins.has(c.key));
     const deletedNode = host.querySelector('.folder-item[data-filter="deleted"]');
 
@@ -704,7 +704,7 @@ async function loadContacts() {
 
 /* ── Folders ───────────────────────────────────────────────────── */
 function getCustomCategoryByKey(key) {
-    const builtins = new Set(['Interesantes', 'Servicios', 'EnCopia', 'SPAM']);
+    const builtins = new Set(['Interesantes', 'Servicios', 'EnCopia', 'SPAM', 'Internos', 'Proveedores', 'Banca', 'PeticionesPresupuesto']);
     return (S.categories || []).find(c => c?.key === key && !builtins.has(c.key));
 }
 
