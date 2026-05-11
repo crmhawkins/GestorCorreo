@@ -443,7 +443,7 @@
 <div id="toast-container" class="toast-container"></div>
 
 @push('scripts')
-<script src="/js/mail.js"></script>
+<script src="/js/mail.js?v=20"></script>
 @endpush
 
 <style>
