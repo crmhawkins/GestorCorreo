@@ -1,8 +1,8 @@
 /**
- * Hawkins Mail v.19 – Vanilla JS frontend
+ * Hawkins Mail v.20 – Vanilla JS frontend
  * Calls the existing Laravel API at /api/*
  */
-console.log('%c Hawkins Mail v.19', 'color:#3b82f6;font-size:14px;font-weight:bold');
+console.log('%c Hawkins Mail v.20', 'color:#3b82f6;font-size:14px;font-weight:bold');
 
 /* ── State ──────────────────────────────────────────────────────── */
 const S = {
@@ -1444,6 +1444,101 @@ async function applyRetentionPolicies() {
     if (s.deleted_days > 0) await api('DELETE', `/messages/purge-old?folder=deleted&older_than_days=${s.deleted_days}`);
 }
 
+/* ── AI Classification Config Modal ───────────────────────────── */
+const AI_CAT_DEFS = [
+    {
+        key: 'Interesantes', name: 'Interesantes', emoji: '⭐',
+        defaultPrompt: 'Emails importantes que requieren atención: respuestas personales, trabajo, negocios, conversaciones directas con personas reales.',
+    },
+    {
+        key: 'Servicios', name: 'Servicios', emoji: '🔔',
+        defaultPrompt: 'Notificaciones automáticas de servicios: confirmaciones de pedidos, alertas de sistemas, facturas, newsletters, bancos, redes sociales.',
+    },
+    {
+        key: 'EnCopia', name: 'En copia', emoji: '📋',
+        defaultPrompt: 'Mensajes en los que el usuario está en copia (CC), listas de distribución o comunicaciones masivas a grupos grandes.',
+    },
+    {
+        key: 'SPAM', name: 'SPAM', emoji: '🗑️',
+        defaultPrompt: 'Correos no deseados, publicidad masiva, phishing, scams, ofertas irrelevantes o mensajes claramente no solicitados.',
+    },
+];
+
+async function openAiClassifyModal() {
+    // Toggle estado actual
+    const acc = S.accounts.find(a => a.id === S.selectedAccount) || S.accounts[0];
+    document.getElementById('ai-classify-enabled').checked = acc ? !!acc.auto_classify : true;
+
+    // Cargar categorías del usuario
+    const r = await api('GET', '/categories');
+    const userCats = Array.isArray(r?.data) ? r.data : [];
+
+    // Renderizar textareas por carpeta
+    const container = document.getElementById('ai-category-prompts');
+    container.innerHTML = AI_CAT_DEFS.map(cat => {
+        const existing = userCats.find(c => c.key === cat.key);
+        const val = existing?.ai_instruction || '';
+        return `<div class="form-group" style="margin-bottom:.9rem">
+            <label style="font-size:.8rem;font-weight:600;color:var(--text-bright);text-transform:none;letter-spacing:0">${cat.emoji} ${cat.name}</label>
+            <textarea class="form-control ai-cat-ta" data-key="${escHtml(cat.key)}" data-id="${existing?.id || ''}"
+                rows="2" placeholder="${escHtml(cat.defaultPrompt)}"
+                style="font-size:.77rem;resize:vertical;margin-top:.25rem">${escHtml(val)}</textarea>
+        </div>`;
+    }).join('');
+
+    document.getElementById('modal-ai-classify').style.display = 'flex';
+}
+
+async function saveAiClassifySettings() {
+    const btn = document.getElementById('btn-save-ai-classify');
+    btn.disabled = true; btn.textContent = 'Guardando…';
+
+    try {
+        const enabled = document.getElementById('ai-classify-enabled').checked;
+        const acc = S.accounts.find(a => a.id === S.selectedAccount) || S.accounts[0];
+
+        // 1. Guardar auto_classify en la cuenta
+        if (acc) {
+            await api('PUT', `/accounts/${acc.id}`, { auto_classify: enabled });
+        }
+
+        // 2. Obtener categorías actuales y guardar prompts
+        const catRes = await api('GET', '/categories');
+        const userCats = Array.isArray(catRes?.data) ? catRes.data : [];
+
+        const textareas = document.querySelectorAll('.ai-cat-ta');
+        for (const ta of textareas) {
+            const key = ta.dataset.key;
+            const prompt = ta.value.trim();
+            const def = AI_CAT_DEFS.find(c => c.key === key);
+            const existing = userCats.find(c => c.key === key);
+
+            if (existing) {
+                await api('PUT', `/categories/${existing.id}`, { ai_instruction: prompt });
+            } else {
+                await api('POST', '/categories', {
+                    key,
+                    name: def?.name || key,
+                    ai_instruction: prompt,
+                    is_system: false,
+                });
+            }
+        }
+
+        // 3. Recargar estado
+        const finalCats = await api('GET', '/categories');
+        S.categories = Array.isArray(finalCats?.data) ? finalCats.data : [];
+        await loadAccounts();
+
+        document.getElementById('modal-ai-classify').style.display = 'none';
+        toast('Configuración IA guardada ✓', 'success');
+    } catch (err) {
+        toast('Error al guardar: ' + (err.message || err), 'error');
+    } finally {
+        btn.disabled = false; btn.textContent = 'Guardar configuración';
+    }
+}
+
 /* ── Mark all read ─────────────────────────────────────────────── */
 async function markAllRead() {
     const params = {};
@@ -1883,6 +1978,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         settingsDD.classList.remove('open');
         openContactsModal();
     });
+    document.getElementById('btn-ai-classify').addEventListener('click', () => {
+        settingsDD.classList.remove('open');
+        openAiClassifyModal();
+    });
+    document.getElementById('btn-close-ai-classify').addEventListener('click', () => { document.getElementById('modal-ai-classify').style.display = 'none'; });
+    document.getElementById('btn-cancel-ai-classify').addEventListener('click', () => { document.getElementById('modal-ai-classify').style.display = 'none'; });
+    document.getElementById('btn-save-ai-classify').addEventListener('click', saveAiClassifySettings);
     document.getElementById('btn-toggle-theme').addEventListener('click', () => {
         settingsDD.classList.remove('open');
         window.toggleTheme();

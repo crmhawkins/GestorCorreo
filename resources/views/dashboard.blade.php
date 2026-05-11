@@ -34,6 +34,10 @@
                                 <svg viewBox="0 0 20 20" fill="currentColor" style="width:14px;height:14px;flex-shrink:0"><path d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z"/></svg>
                                 Plantillas
                             </button>
+                            <button class="settings-dropdown-item" id="btn-ai-classify">
+                                <svg viewBox="0 0 20 20" fill="currentColor" style="width:14px;height:14px;flex-shrink:0"><path d="M9 4.804A7.968 7.968 0 005.5 4c-1.255 0-2.443.29-3.5.804v10A7.969 7.969 0 015.5 14c1.669 0 3.218.51 4.5 1.385A7.962 7.962 0 0114.5 14c1.255 0 2.443.29 3.5.804v-10A7.968 7.968 0 0014.5 4c-1.255 0-2.443.29-3.5.804V12a1 1 0 11-2 0V4.804z"/></svg>
+                                Clasificación IA
+                            </button>
                             <div class="settings-dropdown-divider"></div>
                             <button class="settings-dropdown-item" id="btn-full-sync">
                                 <svg viewBox="0 0 20 20" fill="currentColor" style="width:14px;height:14px;flex-shrink:0"><path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v4a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd"/></svg>
@@ -394,6 +398,44 @@
             <button class="btn-icon" id="btn-close-att-preview" style="flex-shrink:0">&#10005;</button>
         </div>
         <div id="att-preview-body" style="flex:1;overflow:auto;display:flex;align-items:center;justify-content:center;background:var(--bg);min-height:300px;padding:1rem"></div>
+    </div>
+</div>
+
+<!-- MODAL: AI Classification Config -->
+<div class="modal-overlay" id="modal-ai-classify" style="display:none">
+    <div class="modal-box" style="max-width:580px">
+        <div class="modal-header">
+            <h3>🤖 Clasificación con IA</h3>
+            <button class="btn-icon" id="btn-close-ai-classify">&#10005;</button>
+        </div>
+        <div class="modal-body">
+            <!-- Toggle principal -->
+            <div class="form-group" style="margin-bottom:.5rem">
+                <label style="display:flex;align-items:center;gap:.65rem;cursor:pointer;text-transform:none;font-size:.92rem;letter-spacing:0;font-weight:600;color:var(--text-bright)">
+                    <input type="checkbox" id="ai-classify-enabled" style="width:17px;height:17px;margin:0;cursor:pointer;accent-color:var(--primary)">
+                    Clasificar correos nuevos con IA automáticamente
+                </label>
+                <small style="color:var(--text-dim);font-size:.74rem;margin-top:.35rem;display:block;padding-left:22px">
+                    Al sincronizar, cada correo nuevo se clasificará en la carpeta correcta (Interesantes, Servicios, En copia o SPAM).
+                </small>
+            </div>
+
+            <hr class="form-divider">
+
+            <!-- Prompts por carpeta -->
+            <p class="form-section-title">Instrucciones por carpeta</p>
+            <small style="color:var(--text-dim);font-size:.74rem;margin-bottom:.85rem;display:block">
+                Define qué tipo de correos van en cada carpeta. Si lo dejas vacío se usará la instrucción predeterminada (mostrada en el placeholder).
+            </small>
+
+            <div id="ai-category-prompts">
+                <!-- Generado por JS -->
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn-secondary" id="btn-cancel-ai-classify">Cancelar</button>
+            <button class="btn-primary" id="btn-save-ai-classify">Guardar configuración</button>
+        </div>
     </div>
 </div>
 
