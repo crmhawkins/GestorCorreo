@@ -1,8 +1,8 @@
 /**
- * Hawkins Mail v.22 – Vanilla JS frontend
+ * Hawkins Mail v.23 – Vanilla JS frontend
  * Calls the existing Laravel API at /api/*
  */
-console.log('%c Hawkins Mail v.22', 'color:#3b82f6;font-size:14px;font-weight:bold');
+console.log('%c Hawkins Mail v.23', 'color:#3b82f6;font-size:14px;font-weight:bold');
 
 /* ── State ──────────────────────────────────────────────────────── */
 const S = {
@@ -594,12 +594,14 @@ async function renderViewer(msg) {
         ? `<div class="viewer-body-html"><iframe srcdoc="${escHtml(previewHtml)}" sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation"></iframe></div>`
         : `<div class="viewer-body-text">${escHtml(normalizedText || '')}</div>`;
 
+    const ccList = parseAddressList(m.cc_addresses).map(a => typeof a === 'string' ? a : (a.name ? `${a.name} <${a.email}>` : a.email)).join(', ');
     viewer.innerHTML = `
         <div class="message-viewer-wrap">
             <div class="viewer-subject">${escHtml(m.subject || '(Sin asunto)')}</div>
             <div class="viewer-meta">
                 <div><strong>De:</strong> ${escHtml(m.from_name ? m.from_name + ' <' + m.from_email + '>' : m.from_email)}</div>
                 <div><strong>Para:</strong> ${escHtml(getPrimaryTo(m) || '')}</div>
+                ${ccList ? `<div><strong>CC:</strong> ${escHtml(ccList)}</div>` : ''}
                 <div><strong>Fecha:</strong> ${new Date(m.date).toLocaleString('es-ES')}</div>
             </div>
             <div class="viewer-actions">
@@ -1266,12 +1268,14 @@ window.openMessageLarge = async function(id) {
     const body = previewHtml
         ? `<div class="viewer-body-html"><iframe srcdoc="${escHtml(previewHtml)}" sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation" style="height:60vh"></iframe></div>`
         : `<div class="viewer-body-text">${escHtml(normalizedText || '')}</div>`;
+    const ccListLarge = parseAddressList(m.cc_addresses).map(a => typeof a === 'string' ? a : (a.name ? `${a.name} <${a.email}>` : a.email)).join(', ');
     document.getElementById('message-large-content').innerHTML = `
         <div class="message-viewer-wrap">
             <div class="viewer-subject">${escHtml(m.subject || '(Sin asunto)')}</div>
             <div class="viewer-meta">
                 <div><strong>De:</strong> ${escHtml(m.from_name ? m.from_name + ' <' + m.from_email + '>' : (m.from_email || ''))}</div>
                 <div><strong>Para:</strong> ${escHtml(getPrimaryTo(m) || '')}</div>
+                ${ccListLarge ? `<div><strong>CC:</strong> ${escHtml(ccListLarge)}</div>` : ''}
                 <div><strong>Fecha:</strong> ${m.date ? new Date(m.date).toLocaleString('es-ES') : ''}</div>
             </div>
             <div class="viewer-actions">
