@@ -86,16 +86,15 @@ class SyncService
     /**
      * ¿Este mensaje debe clasificarse automáticamente con IA?
      *
-     * Regla: sólo los recibidos HOY (zona horaria de la app). Los históricos
-     * se guardan SIN clasificación — evita gastar tokens reclasificando
-     * miles de emails antiguos cuando se migra una cuenta o se hace un
-     * backfill, y no ensucia la UI moviendo correos viejos de carpeta.
+     * Regla: emails de los últimos 30 días se clasifican al descargarse.
+     * Los más antiguos (migraciones masivas de cuentas antiguas) se guardan
+     * sin clasificar para no gastar tokens en histórico irrelevante.
      */
     private function isClassifiableToday(mixed $date): bool
     {
         try {
             if (empty($date)) return false;
-            return Carbon::parse($date)->isToday();
+            return Carbon::parse($date)->greaterThanOrEqualTo(now()->subDays(30));
         } catch (\Throwable) {
             return false;
         }
