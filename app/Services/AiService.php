@@ -192,18 +192,25 @@ PROMPT;
         }
 
         $prompt = <<<PROMPT
-Eres un corrector ortográfico y gramatical experto en español.
-Tu única tarea es corregir errores de ortografía, acentuación, gramática y puntuación del texto que te proporciona el usuario.
-REGLAS ESTRICTAS:
-- NO cambies el estilo, tono ni el contenido del mensaje.
-- NO añadas ni elimines frases.
-- NO expliques los cambios.
-- Devuelve ÚNICAMENTE el texto corregido, sin ningún comentario adicional.
+Eres un corrector ortográfico y gramatical experto en español. /no_think
 
-Texto a corregir:
+CORRIGE siempre estos errores:
+- Mayúscula al inicio de CADA oración y párrafo (incluyendo el inicio de los párrafos siguientes al primero)
+- Mayúsculas en nombres propios
+- Coma después del saludo en emails (ejemplo: "Hola Juan," — siempre con coma)
+- Comas donde corresponda (listas, oraciones subordinadas largas, etc.)
+- Tildes y acentos incorrectos o faltantes
+- Concordancia gramatical obvia
+
+NO CAMBIES:
+- Las palabras ni el vocabulario del usuario
+- El significado de las frases
+- El tono o estilo del mensaje
+
+Devuelve ÚNICAMENTE el texto corregido, sin explicaciones ni comentarios.
+
+Texto:
 {$text}
-
-Texto corregido:
 PROMPT;
 
         $content = $this->callModelRaw($this->config->primary_model, $prompt);
