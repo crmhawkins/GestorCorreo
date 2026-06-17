@@ -121,9 +121,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/ai-config/models',  [App\Http\Controllers\AiConfigController::class, 'models']);
 
     // AI Actions
-    Route::get('/ai/status',          [App\Http\Controllers\AiController::class, 'status']);
-    Route::post('/ai/generate_reply', [App\Http\Controllers\AiController::class, 'generateReply']);
-    Route::post('/ai/test',           [App\Http\Controllers\AiController::class, 'testConnection']);
+    Route::get('/ai/status',           [App\Http\Controllers\AiController::class, 'status']);
+    Route::post('/ai/generate_reply',  [App\Http\Controllers\AiController::class, 'generateReply']);
+    Route::post('/ai/correct_text',    [App\Http\Controllers\AiController::class, 'correctText']);
+    Route::post('/ai/test',            [App\Http\Controllers\AiController::class, 'testConnection']);
 
     // System
     Route::get('/system/health', [App\Http\Controllers\SystemController::class, 'health']);

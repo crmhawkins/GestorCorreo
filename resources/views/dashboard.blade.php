@@ -253,6 +253,7 @@
                 <div class="template-dropdown" id="template-dropdown"></div>
             </div>
             <button class="btn-secondary" id="btn-generate-compose-ai">Generar con IA</button>
+            <button class="btn-secondary" id="btn-correct-spelling">&#10003; Corregir ortografía</button>
             <button class="btn-secondary" id="btn-cancel-compose">Cancelar</button>
             <button class="btn-primary" id="btn-send">Enviar</button>
         </div>
@@ -447,7 +448,7 @@
 <div id="toast-container" class="toast-container"></div>
 
 @push('scripts')
-<script src="/js/mail.js?v=23"></script>
+<script src="/js/mail.js?v=24"></script>
 @endpush
 
 <style>

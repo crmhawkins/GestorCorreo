@@ -1198,6 +1198,28 @@ async function generateComposeWithAI() {
     } else toast(r?.data?.error || 'No se pudo generar', 'error');
 }
 
+async function correctSpelling() {
+    if (!_quill) { toast('Sin editor activo', 'error'); return; }
+    const text = _quill.getText().trim();
+    if (!text) { toast('Escribe algo antes de corregir', 'error'); return; }
+
+    const btn = document.getElementById('btn-correct-spelling');
+    btn.disabled = true;
+    btn.textContent = 'Corrigiendo...';
+
+    const r = await api('POST', '/ai/correct_text', { text });
+
+    btn.disabled = false;
+    btn.textContent = '✓ Corregir ortografía';
+
+    if (r?.ok && r.data?.corrected_text) {
+        _quill.root.innerHTML = (r.data.corrected_text || '').replace(/\n/g, '<br>');
+        toast('Texto corregido', 'success');
+    } else {
+        toast(r?.data?.error || 'No se pudo corregir', 'error');
+    }
+}
+
 async function sendEmail() {
     const accountId = parseInt(document.getElementById('compose-from').value);
     const to = S.composeToEmails.join(', ');
@@ -2031,6 +2053,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('btn-cancel-compose').addEventListener('click', closeCompose);
     document.getElementById('btn-send').addEventListener('click', sendEmail);
     document.getElementById('btn-generate-compose-ai').addEventListener('click', generateComposeWithAI);
+    document.getElementById('btn-correct-spelling').addEventListener('click', correctSpelling);
     document.getElementById('btn-close-message-large').addEventListener('click', () => { document.getElementById('modal-message-large').style.display = 'none'; });
 
     // Account modal

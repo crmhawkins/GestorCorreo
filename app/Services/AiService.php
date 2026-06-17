@@ -184,6 +184,42 @@ PROMPT;
     }
 
     // -------------------------------------------------------------------------
+
+    public function correctSpelling(string $text): string
+    {
+        if (!$this->config) {
+            throw new \RuntimeException('No hay configuración IA disponible.');
+        }
+
+        $prompt = <<<PROMPT
+Eres un corrector ortográfico y gramatical experto en español.
+Tu única tarea es corregir errores de ortografía, acentuación, gramática y puntuación del texto que te proporciona el usuario.
+REGLAS ESTRICTAS:
+- NO cambies el estilo, tono ni el contenido del mensaje.
+- NO añadas ni elimines frases.
+- NO expliques los cambios.
+- Devuelve ÚNICAMENTE el texto corregido, sin ningún comentario adicional.
+
+Texto a corregir:
+{$text}
+
+Texto corregido:
+PROMPT;
+
+        $content = $this->callModelRaw($this->config->primary_model, $prompt);
+
+        if ($content === null && $this->config->fallback_model && $this->config->fallback_model !== $this->config->primary_model) {
+            $content = $this->callModelRaw($this->config->fallback_model, $prompt);
+        }
+
+        if ($content === null) {
+            throw new \RuntimeException('La IA no pudo corregir el texto.');
+        }
+
+        return trim($content);
+    }
+
+    // -------------------------------------------------------------------------
     // Comprueba disponibilidad de la IA
     // -------------------------------------------------------------------------
 

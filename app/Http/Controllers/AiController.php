@@ -117,4 +117,22 @@ class AiController extends Controller
             return response()->json(['error' => $e->getMessage()], 500);
         }
     }
+
+    /**
+     * POST /api/ai/correct_text
+     * Corrige la ortografía y gramática del texto usando la IA.
+     */
+    public function correctText(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'text' => 'required|string|max:10000',
+        ]);
+
+        try {
+            $corrected = $this->aiService->correctSpelling($validated['text']);
+            return response()->json(['corrected_text' => $corrected]);
+        } catch (\Throwable $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
 }
