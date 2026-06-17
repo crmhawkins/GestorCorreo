@@ -168,9 +168,9 @@ class ImapService
                 'from_email'   => (string)($message->getFrom()[0]->mail ?? ''),
                 'to_addresses' => json_encode($this->parseAddresses($message->getTo())),
                 'cc_addresses'   => json_encode($this->parseAddresses($message->getCc())),
-                'date'         => ($message->getDate()->first() ?? Carbon::now())->utc(),
+                'date'         => $this->parseWebklexDate($message->getDate()),
                 'snippet'      => '',
-                'size_bytes'   => (int)($message->getSize()->first() ?? 0),
+                'size_bytes'   => $this->parseWebklexSize($message->getSize()),
             ];
         } catch (\Exception $e) {
             return null;
@@ -258,5 +258,31 @@ class ImapService
             ];
         }
         return $res;
+    }
+
+    /**
+     * Convierte el valor que devuelve getDate() a Carbon UTC.
+     * Con setFetchBody(false) webklex devuelve un string con la fecha RFC822
+     * (incluye timezone: "Thu, 17 Jun 2026 11:23:45 +0200").
+     * Sin ese flag devuelve un Attribute que contiene un Carbon con timezone.
+     */
+    private function parseWebklexDate(mixed $raw): Carbon
+    {
+        if ($raw instanceof \Webklex\PHPIMAP\Attribute) {
+            return ($raw->first() ?? Carbon::now())->utc();
+        }
+        return !empty($raw) ? Carbon::parse((string)$raw)->utc() : Carbon::now()->utc();
+    }
+
+    /**
+     * Extrae el tamaño en bytes del valor que devuelve getSize().
+     * Con setFetchBody(false) puede devolver un entero o string directamente.
+     */
+    private function parseWebklexSize(mixed $raw): int
+    {
+        if ($raw instanceof \Webklex\PHPIMAP\Attribute) {
+            return (int)($raw->first() ?? 0);
+        }
+        return (int)($raw ?? 0);
     }
 }
