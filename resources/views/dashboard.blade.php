@@ -421,7 +421,7 @@
                     Clasificar correos nuevos con IA automáticamente
                 </label>
                 <small style="color:var(--text-dim);font-size:.74rem;margin-top:.35rem;display:block;padding-left:22px">
-                    Al sincronizar, cada correo nuevo se clasificará en la carpeta correcta (Interesantes, Servicios, En copia o SPAM).
+                    Al sincronizar, cada correo nuevo se clasificará en la carpeta correcta. Requiere tener las instrucciones guardadas al menos una vez.
                 </small>
             </div>
 
@@ -430,7 +430,7 @@
             <!-- Prompts por carpeta -->
             <p class="form-section-title">Instrucciones por carpeta</p>
             <small style="color:var(--text-dim);font-size:.74rem;margin-bottom:.85rem;display:block">
-                Define qué tipo de correos van en cada carpeta. Si lo dejas vacío se usará la instrucción predeterminada (mostrada en el placeholder).
+                Define qué tipo de correos van en cada carpeta. Si lo dejas vacío, al guardar se usará la instrucción predeterminada (la del placeholder).
             </small>
 
             <div id="ai-category-prompts">
@@ -448,7 +448,7 @@
 <div id="toast-container" class="toast-container"></div>
 
 @push('scripts')
-<script src="/js/mail.js?v=24"></script>
+<script src="/js/mail.js?v=25"></script>
 @endpush
 
 <style>

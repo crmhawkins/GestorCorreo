@@ -52,15 +52,19 @@ class ClassificationService
         try {
             $userId = $account->user_id;
 
-            // 1. Obtener categorías del usuario
+            // 1. Obtener categorías del usuario.
+            // Si no tiene ninguna configurada, no clasificar — la cuenta necesita
+            // que el usuario haya guardado sus carpetas desde el panel de IA.
             $userCategories = Category::where('user_id', $userId)->get();
-            $categories     = $userCategories->isNotEmpty()
-                ? $userCategories->map(fn($c) => [
-                    'key'            => $c->key,
-                    'name'           => $c->name,
-                    'ai_instruction' => $c->ai_instruction ?? '',
-                ])->toArray()
-                : self::DEFAULT_CATEGORIES;
+            if ($userCategories->isEmpty()) {
+                return null;
+            }
+
+            $categories = $userCategories->map(fn($c) => [
+                'key'            => $c->key,
+                'name'           => $c->name,
+                'ai_instruction' => $c->ai_instruction ?? '',
+            ])->toArray();
 
             // 2. Construir messageData desde el mensaje
             $messageData = [

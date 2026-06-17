@@ -1551,20 +1551,28 @@ async function saveAiClassifySettings() {
         const textareas = document.querySelectorAll('.ai-cat-ta');
         for (const ta of textareas) {
             const key = ta.dataset.key;
-            const prompt = ta.value.trim();
+            const typed = ta.value.trim();
             const def = AI_CAT_DEFS.find(c => c.key === key);
+            // Si el usuario lo dejó vacío, usar el prompt por defecto (el que se muestra en el placeholder)
+            const finalPrompt = typed || def?.defaultPrompt || key;
             const existing = userCats.find(c => c.key === key);
 
             if (existing) {
-                await api('PUT', `/categories/${existing.id}`, { ai_instruction: prompt });
+                await api('PUT', `/categories/${existing.id}`, { ai_instruction: finalPrompt });
             } else {
                 await api('POST', '/categories', {
                     key,
                     name: def?.name || key,
-                    ai_instruction: prompt,
+                    ai_instruction: finalPrompt,
                     is_system: false,
                 });
             }
+        }
+
+        // Validar: si activaron la clasificación pero no se han guardado categorías aún,
+        // avisar (en la próxima apertura del modal ya aparecerán con los prompts por defecto)
+        if (enabled && userCats.length === 0) {
+            toast('Clasificación activada. Las categorías se han creado con instrucciones por defecto.', 'success');
         }
 
         // 3. Recargar estado
