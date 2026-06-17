@@ -154,7 +154,10 @@ class ImapService
     {
         try {
             $folder = $this->client->getFolder($this->currentFolderName ?: 'INBOX');
-            $message = $folder->query()->whereUid($uid)->get()->first();
+            // setFetchBody(false) evita que webklex descargue el cuerpo del mensaje
+            // (que puede ser de decenas de MB) solo para leer los headers.
+            // RFC822.SIZE sigue disponible porque es metadata del servidor, no el body.
+            $message = $folder->query()->whereUid($uid)->setFetchBody(false)->get()->first();
             if (!$message) return null;
 
             return [
