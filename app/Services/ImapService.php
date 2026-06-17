@@ -167,6 +167,7 @@ class ImapService
                 'cc_addresses'   => json_encode($this->parseAddresses($message->getCc())),
                 'date'         => ($message->getDate()->first() ?? Carbon::now())->utc(),
                 'snippet'      => '',
+                'size_bytes'   => (int)($message->getSize()->first() ?? 0),
             ];
         } catch (\Exception $e) {
             return null;

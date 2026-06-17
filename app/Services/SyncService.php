@@ -399,6 +399,42 @@ class SyncService
                         continue;
                     }
 
+                    // Emails demasiado grandes (>20 MB): guardar stub sin body para no bloquear los demás
+                    $sizeBytes = (int)($headers['size_bytes'] ?? 0);
+                    $maxBytes  = 20 * 1024 * 1024; // 20 MB
+                    if ($sizeBytes > $maxBytes) {
+                        $sizeMB = round($sizeBytes / 1024 / 1024, 1);
+                        Log::warning("SyncService IMAP: Email muy grande ({$sizeMB} MB), guardando stub", [
+                            'account_id' => $account->id, 'uid' => $uid, 'size_bytes' => $sizeBytes,
+                        ]);
+                        $messageId = (string) Str::uuid();
+                        $message   = Message::create([
+                            'id'              => $messageId,
+                            'account_id'      => $account->id,
+                            'imap_uid'        => $uid,
+                            'message_id'      => $headers['message_id'] ?? '',
+                            'subject'         => $headers['subject']    ?? '',
+                            'from_name'       => $headers['from_name']  ?? '',
+                            'from_email'      => $headers['from_email'] ?? '',
+                            'to_addresses'    => $headers['to_addresses'] ?? '[]',
+                            'cc_addresses'    => $headers['cc_addresses'] ?? '[]',
+                            'date'            => $headers['date'] ?? now(),
+                            'snippet'         => "[Email muy grande: {$sizeMB} MB — ábrelo desde tu cliente de correo]",
+                            'folder'          => 'INBOX',
+                            'body_text'       => "[Este email pesa {$sizeMB} MB y no se puede mostrar aquí. Ábrelo desde tu aplicación de correo habitual.]",
+                            'body_html'       => '',
+                            'has_attachments' => true,
+                            'is_read'         => false,
+                            'is_starred'      => false,
+                            'created_at'      => now(),
+                        ]);
+                        if ($headers['message_id']) $existingMessageIds[$headers['message_id']] = 1;
+                        $existingUids[(string)$uid] = 1;
+                        $newMessageIds[] = $messageId;
+                        $newMessages++;
+                        continue;
+                    }
+
                     // Fetch body completo
                     $bodyData = $imap->fetchFullMessageBody($uid);
 
@@ -759,6 +795,39 @@ class SyncService
 
                     // Verificar duplicado en O(1) sin query extra
                     if ($headers['message_id'] && isset($existingMessageIds[$headers['message_id']])) {
+                        continue;
+                    }
+
+                    // Emails demasiado grandes (>20 MB): guardar stub sin body
+                    $sizeBytes = (int)($headers['size_bytes'] ?? 0);
+                    $maxBytes  = 20 * 1024 * 1024;
+                    if ($sizeBytes > $maxBytes) {
+                        $sizeMB = round($sizeBytes / 1024 / 1024, 1);
+                        $messageId = (string) Str::uuid();
+                        $message   = Message::create([
+                            'id'              => $messageId,
+                            'account_id'      => $account->id,
+                            'imap_uid'        => $uid,
+                            'message_id'      => $headers['message_id'] ?? '',
+                            'subject'         => $headers['subject']    ?? '',
+                            'from_name'       => $headers['from_name']  ?? '',
+                            'from_email'      => $headers['from_email'] ?? '',
+                            'to_addresses'    => $headers['to_addresses'] ?? '[]',
+                            'cc_addresses'    => $headers['cc_addresses'] ?? '[]',
+                            'date'            => $headers['date'] ?? now(),
+                            'snippet'         => "[Email muy grande: {$sizeMB} MB — ábrelo desde tu cliente de correo]",
+                            'folder'          => 'INBOX',
+                            'body_text'       => "[Este email pesa {$sizeMB} MB y no se puede mostrar aquí. Ábrelo desde tu aplicación de correo habitual.]",
+                            'body_html'       => '',
+                            'has_attachments' => true,
+                            'is_read'         => false,
+                            'is_starred'      => false,
+                            'created_at'      => now(),
+                        ]);
+                        if ($headers['message_id']) $existingMessageIds[$headers['message_id']] = 1;
+                        $existingUids[(string)$uid] = 1;
+                        $newMessageIds[] = $messageId;
+                        $newMessages++;
                         continue;
                     }
 
