@@ -64,7 +64,7 @@ class MessageController extends Controller
         return response()->json([
             'all' => (int)(Message::whereIn('account_id', $accountIds)
                 ->where('is_read', false)
-                ->where('folder', 'INBOX')
+                ->whereNotIn('folder', ['deleted', 'Sent', 'SPAM'])
                 ->count()),
             'starred' => (int)Message::whereIn('account_id', $accountIds)
                 ->where('is_read', false)
@@ -100,6 +100,7 @@ class MessageController extends Controller
             'is_read'    => 'sometimes|boolean',
             'date_from'  => 'sometimes|date',
             'date_to'    => 'sometimes|date',
+            'all_mail'   => 'sometimes|boolean',
         ]);
 
         // Obtener IDs de cuentas del usuario
@@ -119,7 +120,10 @@ class MessageController extends Controller
         }
 
         // Filtro por carpeta
-        if (!empty($validated['folder'])) {
+        if (!empty($validated['all_mail'])) {
+            // Vista "Todo": todos los mensajes excepto papelera/enviados/spam
+            $query->whereNotIn('folder', ['deleted', 'Sent', 'SPAM']);
+        } elseif (!empty($validated['folder'])) {
             $query->where('folder', $validated['folder']);
         }
 

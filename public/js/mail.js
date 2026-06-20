@@ -653,7 +653,7 @@ async function loadMessages(reset = true) {
     if (!S.hasMore) return;
     const params = new URLSearchParams({ page: S.page, per_page: 50 });
     if (S.selectedAccount) params.set('account_id', S.selectedAccount);
-    if (S.filter === 'all') params.set('folder', 'INBOX');
+    if (S.filter === 'all') params.set('all_mail', '1');
     else if (S.filter === 'starred') params.set('starred', '1');
     else if (S.filter === 'deleted') params.set('deleted', '1');
     else if (S.filter === 'Sent') params.set('folder', 'Sent');
