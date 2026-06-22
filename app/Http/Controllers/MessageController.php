@@ -121,8 +121,11 @@ class MessageController extends Controller
 
         // Filtro por carpeta
         if (!empty($validated['all_mail'])) {
-            // Vista "Todo": todos los mensajes excepto papelera/enviados/spam
-            $query->whereNotIn('folder', ['deleted', 'Sent', 'SPAM']);
+            // Con búsqueda activa incluir SPAM; sin búsqueda excluirlo de la vista principal
+            $excludeFolders = !empty($validated['search'])
+                ? ['deleted', 'Sent']
+                : ['deleted', 'Sent', 'SPAM'];
+            $query->whereNotIn('folder', $excludeFolders);
         } elseif (!empty($validated['folder'])) {
             $query->where('folder', $validated['folder']);
         }

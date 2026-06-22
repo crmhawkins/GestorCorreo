@@ -448,7 +448,7 @@
 <div id="toast-container" class="toast-container"></div>
 
 @push('scripts')
-<script src="/js/mail.js?v=27"></script>
+<script src="/js/mail.js?v=28"></script>
 @endpush
 
 <style>

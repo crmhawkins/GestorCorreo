@@ -653,11 +653,20 @@ async function loadMessages(reset = true) {
     if (!S.hasMore) return;
     const params = new URLSearchParams({ page: S.page, per_page: 50 });
     if (S.selectedAccount && !S.search) params.set('account_id', S.selectedAccount);
-    if (S.filter === 'all') params.set('all_mail', '1');
-    else if (S.filter === 'starred') params.set('starred', '1');
-    else if (S.filter === 'deleted') params.set('deleted', '1');
-    else if (S.filter === 'Sent') params.set('folder', 'Sent');
-    else params.set('label', S.filter);
+    if (S.search) {
+        // Al buscar, ignorar la carpeta activa y buscar en todos los buzones
+        params.set('all_mail', '1');
+    } else if (S.filter === 'all') {
+        params.set('all_mail', '1');
+    } else if (S.filter === 'starred') {
+        params.set('starred', '1');
+    } else if (S.filter === 'deleted') {
+        params.set('deleted', '1');
+    } else if (S.filter === 'Sent') {
+        params.set('folder', 'Sent');
+    } else {
+        params.set('label', S.filter);
+    }
     if (S.dateFrom) params.set('date_from', S.dateFrom);
     if (S.dateTo) params.set('date_to', S.dateTo);
     if (S.readFilter !== '') params.set('is_read', S.readFilter);
