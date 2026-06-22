@@ -652,7 +652,7 @@ async function loadMessages(reset = true) {
     if (reset) { S.page = 1; S.messages = []; S.hasMore = true; S.selectedIds.clear(); S.lastClickedId = null; }
     if (!S.hasMore) return;
     const params = new URLSearchParams({ page: S.page, per_page: 50 });
-    if (S.selectedAccount) params.set('account_id', S.selectedAccount);
+    if (S.selectedAccount && !S.search) params.set('account_id', S.selectedAccount);
     if (S.filter === 'all') params.set('all_mail', '1');
     else if (S.filter === 'starred') params.set('starred', '1');
     else if (S.filter === 'deleted') params.set('deleted', '1');
