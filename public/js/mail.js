@@ -1,8 +1,8 @@
 /**
- * Hawkins Mail v.29 – Vanilla JS frontend
+ * Hawkins Mail v.30 – Vanilla JS frontend
  * Calls the existing Laravel API at /api/*
  */
-console.log('%c Hawkins Mail v.29', 'color:#3b82f6;font-size:14px;font-weight:bold');
+console.log('%c Hawkins Mail v.30', 'color:#3b82f6;font-size:14px;font-weight:bold');
 
 /* ── State ──────────────────────────────────────────────────────── */
 const S = {
@@ -2029,17 +2029,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (S.accounts.length) openAccountModal(S.accounts.find(a => a.id === S.selectedAccount) || S.accounts[0]);
         else openAccountModal();
     });
-    document.getElementById('btn-manage-contacts').addEventListener('click', () => {
+    document.getElementById('btn-manage-contacts')?.addEventListener('click', () => {
         settingsDD.classList.remove('open');
         openContactsModal();
     });
-    document.getElementById('btn-ai-classify').addEventListener('click', () => {
+    document.getElementById('btn-ai-classify')?.addEventListener('click', () => {
         settingsDD.classList.remove('open');
         openAiClassifyModal();
     });
-    document.getElementById('btn-close-ai-classify').addEventListener('click', () => { document.getElementById('modal-ai-classify').style.display = 'none'; });
-    document.getElementById('btn-cancel-ai-classify').addEventListener('click', () => { document.getElementById('modal-ai-classify').style.display = 'none'; });
-    document.getElementById('btn-save-ai-classify').addEventListener('click', saveAiClassifySettings);
+    document.getElementById('btn-close-ai-classify')?.addEventListener('click', () => { document.getElementById('modal-ai-classify').style.display = 'none'; });
+    document.getElementById('btn-cancel-ai-classify')?.addEventListener('click', () => { document.getElementById('modal-ai-classify').style.display = 'none'; });
+    document.getElementById('btn-save-ai-classify')?.addEventListener('click', saveAiClassifySettings);
     document.getElementById('btn-toggle-theme').addEventListener('click', () => {
         settingsDD.classList.remove('open');
         window.toggleTheme();
