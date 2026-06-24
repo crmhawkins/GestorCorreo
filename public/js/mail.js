@@ -1,8 +1,8 @@
 /**
- * Hawkins Mail v.23 – Vanilla JS frontend
+ * Hawkins Mail v.29 – Vanilla JS frontend
  * Calls the existing Laravel API at /api/*
  */
-console.log('%c Hawkins Mail v.23', 'color:#3b82f6;font-size:14px;font-weight:bold');
+console.log('%c Hawkins Mail v.29', 'color:#3b82f6;font-size:14px;font-weight:bold');
 
 /* ── State ──────────────────────────────────────────────────────── */
 const S = {
@@ -1958,10 +1958,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (si) {
         si.value = '';
         S.search = '';
-        si.setAttribute('readonly', '');
-        const unlockSearch = () => { si.removeAttribute('readonly'); si.focus(); };
-        si.addEventListener('mousedown', unlockSearch);
-        si.addEventListener('focus', unlockSearch);
     }
 
     updateThemeLabel();

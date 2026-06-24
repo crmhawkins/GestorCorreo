@@ -1,5 +1,5 @@
 @extends('layouts.app')
-@section('title', 'Hawkins Mail v.28')
+@section('title', 'Hawkins Mail v.29')
 
 @section('content')
 <div class="mail-app" id="app">
@@ -448,7 +448,7 @@
 <div id="toast-container" class="toast-container"></div>
 
 @push('scripts')
-<script src="/js/mail.js?v=28"></script>
+<script src="/js/mail.js?v=29"></script>
 @endpush
 
 <style>
