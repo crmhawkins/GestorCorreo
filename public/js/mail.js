@@ -2040,16 +2040,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('btn-close-ai-classify')?.addEventListener('click', () => { document.getElementById('modal-ai-classify').style.display = 'none'; });
     document.getElementById('btn-cancel-ai-classify')?.addEventListener('click', () => { document.getElementById('modal-ai-classify').style.display = 'none'; });
     document.getElementById('btn-save-ai-classify')?.addEventListener('click', saveAiClassifySettings);
-    document.getElementById('btn-toggle-theme').addEventListener('click', () => {
+    document.getElementById('btn-toggle-theme')?.addEventListener('click', () => {
         settingsDD.classList.remove('open');
         window.toggleTheme();
         updateThemeLabel();
     });
-    document.getElementById('btn-font-decrease').addEventListener('click', e => {
+    document.getElementById('btn-font-decrease')?.addEventListener('click', e => {
         e.stopPropagation();
         setFontSize(getFontSize() - 1);
     });
-    document.getElementById('btn-font-increase').addEventListener('click', e => {
+    document.getElementById('btn-font-increase')?.addEventListener('click', e => {
         e.stopPropagation();
         setFontSize(getFontSize() + 1);
     });
@@ -2062,25 +2062,25 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     // Compose modal
-    document.getElementById('btn-close-compose').addEventListener('click', closeCompose);
-    document.getElementById('btn-cancel-compose').addEventListener('click', closeCompose);
-    document.getElementById('btn-send').addEventListener('click', sendEmail);
-    document.getElementById('btn-generate-compose-ai').addEventListener('click', generateComposeWithAI);
-    document.getElementById('btn-correct-spelling').addEventListener('click', correctSpelling);
-    document.getElementById('btn-close-message-large').addEventListener('click', () => { document.getElementById('modal-message-large').style.display = 'none'; });
+    document.getElementById('btn-close-compose')?.addEventListener('click', closeCompose);
+    document.getElementById('btn-cancel-compose')?.addEventListener('click', closeCompose);
+    document.getElementById('btn-send')?.addEventListener('click', sendEmail);
+    document.getElementById('btn-generate-compose-ai')?.addEventListener('click', generateComposeWithAI);
+    document.getElementById('btn-correct-spelling')?.addEventListener('click', correctSpelling);
+    document.getElementById('btn-close-message-large')?.addEventListener('click', () => { document.getElementById('modal-message-large').style.display = 'none'; });
 
     // Account modal
-    document.getElementById('btn-close-account').addEventListener('click', () => { document.getElementById('modal-account').style.display = 'none'; });
-    document.getElementById('btn-cancel-account').addEventListener('click', () => { document.getElementById('modal-account').style.display = 'none'; });
-    document.getElementById('btn-save-account').addEventListener('click', saveAccount);
+    document.getElementById('btn-close-account')?.addEventListener('click', () => { document.getElementById('modal-account').style.display = 'none'; });
+    document.getElementById('btn-cancel-account')?.addEventListener('click', () => { document.getElementById('modal-account').style.display = 'none'; });
+    document.getElementById('btn-save-account')?.addEventListener('click', saveAccount);
 
     // Contacts modal
-    document.getElementById('btn-close-contacts').addEventListener('click', () => { document.getElementById('modal-contacts').style.display = 'none'; });
+    document.getElementById('btn-close-contacts')?.addEventListener('click', () => { document.getElementById('modal-contacts').style.display = 'none'; });
     const contactsSearch = document.getElementById('contacts-search');
     if (contactsSearch) {
         contactsSearch.addEventListener('input', e => renderContactsList(e.target.value));
     }
-    document.getElementById('btn-add-contact').addEventListener('click', addContact);
+    document.getElementById('btn-add-contact')?.addEventListener('click', addContact);
 
     // Close modals on overlay click
     document.querySelectorAll('.modal-overlay').forEach(o => {
