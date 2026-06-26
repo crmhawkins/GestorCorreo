@@ -34,22 +34,22 @@
 
 /* ── Light Theme ──────────────────────────────────────────────── */
 [data-theme="light"] {
-    --bg:            #f1f5f9;
+    --bg:            #e8edf3;
     --sidebar-bg:    #ffffff;
     --surface:       #ffffff;
-    --surface-hover: #f1f5f9;
-    --border:        #cbd5e1;
-    --border-light:  #e2e8f0;
-    --accent:        #2563eb;
-    --accent-hover:  #1d4ed8;
-    --accent-muted:  rgba(37,99,235,.10);
-    --text:          #1e293b;
-    --text-dim:      #475569;
-    --text-bright:   #0f172a;
-    --text-label:    #334155;
-    --shadow-sm:     0 1px 2px rgba(0,0,0,.06);
-    --shadow-md:     0 4px 16px rgba(0,0,0,.08);
-    --shadow-lg:     0 12px 40px rgba(0,0,0,.12);
+    --surface-hover: #dde3eb;
+    --border:        #b0bcc8;
+    --border-light:  #c8d2dc;
+    --accent:        #1d4ed8;
+    --accent-hover:  #1e40af;
+    --accent-muted:  rgba(29,78,216,.12);
+    --text:          #0f172a;
+    --text-dim:      #1e3a5f;
+    --text-bright:   #020617;
+    --text-label:    #0f2744;
+    --shadow-sm:     0 1px 2px rgba(0,0,0,.10);
+    --shadow-md:     0 4px 16px rgba(0,0,0,.12);
+    --shadow-lg:     0 12px 40px rgba(0,0,0,.18);
     color-scheme: light;
 }
 
@@ -400,7 +400,7 @@ select.form-control option { background: var(--surface); }
 }
 .message-date { font-size: .68rem; color: var(--text-dim); white-space: nowrap; }
 .message-subject {
-    font-size: .75rem; color: var(--text-dim);
+    font-size: .75rem; color: var(--text);
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: .1rem;
 }
 .message-snippet {
