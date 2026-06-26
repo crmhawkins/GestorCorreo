@@ -1,8 +1,8 @@
 /**
- * Hawkins Mail v.32 – Vanilla JS frontend
+ * Hawkins Mail v.33 – Vanilla JS frontend
  * Calls the existing Laravel API at /api/*
  */
-console.log('%c Hawkins Mail v.32', 'color:#3b82f6;font-size:14px;font-weight:bold');
+console.log('%c Hawkins Mail v.33', 'color:#3b82f6;font-size:14px;font-weight:bold');
 
 /* ── State ──────────────────────────────────────────────────────── */
 const S = {
@@ -1955,11 +1955,14 @@ function promptMailPassword() {
 /* ── Init ──────────────────────────────────────────────────────── */
 document.addEventListener('DOMContentLoaded', async () => {
     const si = document.getElementById('search-input');
-    let lastKeydown = 0;
     if (si) {
         si.value = '';
         S.search = '';
-        si.addEventListener('keydown', () => { lastKeydown = Date.now(); });
+        // readonly impide que el gestor de contraseñas de Chrome autorrellene el campo.
+        // Se quita solo cuando el usuario interactúa y se restaura al salir sin búsqueda.
+        si.setAttribute('readonly', '');
+        si.addEventListener('focus', () => { si.removeAttribute('readonly'); });
+        si.addEventListener('blur',  () => { if (!S.search) si.setAttribute('readonly', ''); });
     }
 
     updateThemeLabel();
@@ -2059,8 +2062,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Search
     let searchTimer;
     si.addEventListener('input', e => {
-        // Si no hay keydown reciente (<150ms) es autofill del browser — ignorar
-        if (Date.now() - lastKeydown > 150) { si.value = S.search; return; }
         clearTimeout(searchTimer);
         searchTimer = setTimeout(() => { S.search = e.target.value.trim(); loadMessages(); }, 400);
     });
