@@ -1,5 +1,5 @@
 @extends('layouts.app')
-@section('title', 'Hawkins Mail v.31')
+@section('title', 'Hawkins Mail v.32')
 
 @section('content')
 <div class="mail-app" id="app">
@@ -12,7 +12,7 @@
                     <div class="sidebar-brand-mark">H</div>
                     <div class="sidebar-brand-name">
                         Hawkins Mail
-                        <span class="version">v.31</span>
+                        <span class="version">v.32</span>
                     </div>
                 </div>
                 <div class="sidebar-header-actions">
