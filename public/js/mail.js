@@ -1,8 +1,8 @@
 /**
- * Hawkins Mail v.30 – Vanilla JS frontend
+ * Hawkins Mail v.31 – Vanilla JS frontend
  * Calls the existing Laravel API at /api/*
  */
-console.log('%c Hawkins Mail v.30', 'color:#3b82f6;font-size:14px;font-weight:bold');
+console.log('%c Hawkins Mail v.31', 'color:#3b82f6;font-size:14px;font-weight:bold');
 
 /* ── State ──────────────────────────────────────────────────────── */
 const S = {
@@ -1955,9 +1955,16 @@ function promptMailPassword() {
 /* ── Init ──────────────────────────────────────────────────────── */
 document.addEventListener('DOMContentLoaded', async () => {
     const si = document.getElementById('search-input');
+    let searchReady = false;
     if (si) {
         si.value = '';
         S.search = '';
+        // Bloquear los primeros 600ms para que el autofill del browser no dispare búsquedas
+        setTimeout(() => {
+            si.value = '';
+            S.search = '';
+            searchReady = true;
+        }, 600);
     }
 
     updateThemeLabel();
@@ -2057,6 +2064,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Search
     let searchTimer;
     si.addEventListener('input', e => {
+        if (!searchReady) return; // ignorar autofill del browser en los primeros 600ms
         clearTimeout(searchTimer);
         searchTimer = setTimeout(() => { S.search = e.target.value.trim(); loadMessages(); }, 400);
     });
