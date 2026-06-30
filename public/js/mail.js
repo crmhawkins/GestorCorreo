@@ -1,8 +1,10 @@
 /**
- * Hawkins Mail v.33 – Vanilla JS frontend
+ * Hawkins Mail v.34 – Vanilla JS frontend
  * Calls the existing Laravel API at /api/*
  */
-console.log('%c Hawkins Mail v.33', 'color:#3b82f6;font-size:14px;font-weight:bold');
+const APP_VERSION = 'v.34';
+console.log('%c Hawkins Mail ' + APP_VERSION, 'color:#3b82f6;font-size:14px;font-weight:bold');
+document.addEventListener('DOMContentLoaded', () => { const el = document.getElementById('app-version'); if (el) el.textContent = APP_VERSION; });
 
 /* ── State ──────────────────────────────────────────────────────── */
 const S = {
@@ -96,7 +98,7 @@ function escHtml(s) {
 }
 
 function fmtDate(d) {
-    const date = new Date(d);
+    const date = new Date(typeof d === 'string' && !d.includes('Z') && !d.includes('+') ? d.replace(' ', 'T') + 'Z' : d);
     if (Number.isNaN(date.getTime())) return '';
     const now = new Date();
     const dayNames = ['Dom', 'Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab'];
@@ -1164,7 +1166,10 @@ function openCompose(mode = 'new', originalMsg = null) {
 
     if (originalMsg && mode !== 'new') {
         if (mode === 'reply') S.composeToEmails = [originalMsg.from_email].filter(Boolean);
-        if (mode === 'reply_all') S.composeToEmails = [originalMsg.from_email, ...parseAddressList(originalMsg.to_addresses).map(a => a.email || a)].filter(Boolean);
+        if (mode === 'reply_all') {
+            S.composeToEmails = [originalMsg.from_email, ...parseAddressList(originalMsg.to_addresses).map(a => a.email || a)].filter(Boolean);
+            S.composeCcEmails = parseAddressList(originalMsg.cc_addresses).map(a => a.email || a).filter(Boolean);
+        }
         if (mode === 'forward') S.composeToEmails = [];
         const clean = normalizeBodyTextForReply(originalMsg.body_text, originalMsg.body_html);
         subject.value = (mode === 'forward' ? 'Fwd: ' : 'Re: ') + (originalMsg.subject || '');

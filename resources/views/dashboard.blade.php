@@ -1,5 +1,5 @@
 @extends('layouts.app')
-@section('title', 'Hawkins Mail v.33')
+@section('title', 'Hawkins Mail')
 
 @section('content')
 <div class="mail-app" id="app">
@@ -12,7 +12,7 @@
                     <div class="sidebar-brand-mark">H</div>
                     <div class="sidebar-brand-name">
                         Hawkins Mail
-                        <span class="version">v.33</span>
+                        <span class="version" id="app-version"></span>
                     </div>
                 </div>
                 <div class="sidebar-header-actions">
@@ -448,7 +448,7 @@
 <div id="toast-container" class="toast-container"></div>
 
 @push('scripts')
-<script src="/js/mail.js?v=30"></script>
+<script src="/js/mail.js?v={{ filemtime(public_path('js/mail.js')) }}"></script>
 @endpush
 
 <style>
