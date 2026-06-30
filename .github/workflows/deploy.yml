@@ -1,0 +1,41 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Copy files to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: 217.160.39.81
+          username: claude
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          source: "app/,resources/,public/js/,public/css/,routes/"
+          target: /tmp/gestor_deploy
+          strip_components: 0
+
+      - name: Apply on container & clear cache
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: 217.160.39.81
+          username: claude
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: |
+            C=laravel-rgscc0k0wcog4gckk0k8884c
+            D=/tmp/gestor_deploy
+            docker cp $D/app/        $C:/var/www/html/app/
+            docker cp $D/resources/  $C:/var/www/html/resources/
+            docker cp $D/routes/     $C:/var/www/html/routes/
+            docker cp $D/public/js/  $C:/var/www/html/public/js/
+            [ -d $D/public/css ] && docker cp $D/public/css/ $C:/var/www/html/public/css/ || true
+            docker exec -u www-data $C php artisan view:clear
+            docker exec -u www-data $C php artisan config:clear
+            docker exec -u www-data $C php artisan route:clear
+            rm -rf $D
+            echo "Deploy OK"
